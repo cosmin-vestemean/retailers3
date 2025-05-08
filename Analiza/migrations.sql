@@ -188,6 +188,7 @@ add FINDOC int,
         WSPASS VARCHAR(MAX),
         COMPANY INT,
         BRANCH INT,
+        ACTIVE SMALLINT,
         CONSTRAINT PK_CCCRETAILERSCLIENTS PRIMARY KEY (CCCRETAILERSCLIENTS)
     );
 insert into CCCRETAILERSCLIENTS (
@@ -196,7 +197,8 @@ insert into CCCRETAILERSCLIENTS (
         WSUSER,
         WSPASS,
         COMPANY,
-        BRANCH
+        BRANCH,
+        ACTIVE
     )
 VALUES (
         1,
@@ -204,7 +206,8 @@ VALUES (
         'websitepetfactory',
         'petfactory4321',
         50,
-        1000
+        1000,
+        1
     );
 ALTER TABLE MTRUNIT
 ADD CCCDOCPROCESSSHORTCUT VARCHAR(10) --Retailers_Index_Docs SQL script, format f.trndate as date:
