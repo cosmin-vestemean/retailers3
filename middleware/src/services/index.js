@@ -1,3 +1,6 @@
+import ediConnectors from './edi-connectors/edi-connectors.service.js';
+
 export const services = app => {
-  // All services will be registered here
-}
+  // Register EDI connectors service
+  ediConnectors(app);
+};
