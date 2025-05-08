@@ -1,0 +1,44 @@
+Sinteză pentru agentul AI – vNext EDI Platformă Pet Factory
+
+1. Scop și Context  
+- Înlocuim sistemul EDI existent cu o platformă PaaS multi-tenant ce rulează Heroku.  
+- Permite integrarea bidirecțională între ERP Softone (S1) și furnizori EDI (DocProcess, Infinite, alții viitori).  
+- Prima livrare: Pet Factory; ulterior extindere la alți clienți cu licență per retailer.
+
+2. Arhitectură Generală  
+- Actori:  
+  1. ERP Softone cu Web Services custom (JS ES5) și tabele “CCC*” pentru configurare și stocare.  
+  2. Middleware (FeathersJS/Node.js) care orchestrează download-ul, parsarea și trimiterea documentelor.  
+  3. Frontend Vue.js 3 pentru configurare mapări și monitorizare.
+
+- Flux documente:  
+  • Inbound (EDI→S1): FTP/SFTP download → stocare raw XML în CCCEDIRAWDOCUMENTS → identificare retailer (GLN) → aplicare mapări → creare document S1 → log.  
+  • Outbound (S1→EDI): selectare documente eligibile → aplicare mapări inverse → generare XML conform XSD retailer → upload → procesare APERAK.
+
+3. Configurare & Mapări  
+- Mapare pe două niveluri:  
+  1. Document-level (CCCDOCUMENTES1MAPPINGS): triplet {sosource, fprms, series}, tip EDI (ORDERS, INVOICE…), direcție (IN/OUT), auto-procesare on/off.  
+  2. Field-level (CCCXMLS1MAPPINGS): XPath → S1 table.field sau transformare (FORMAT_DATE, LOOKUP, SQL, script).
+
+- Editor web (Vue.js): upload XSD/XML, tree-view pentru selecție XPath, drag-drop mapări, flag mandatory, clonare/template.
+
+4. Stocare și Monitorizare  
+- Raw XML: CCCEDIRAWDOCUMENTS (FILENAME, RETAILER_ID, STATUS, CONTENT, APP_OWNER legacy/new).  
+- Procesare & Audit: CCCEDIPROCESSMONITOR (pas cu pas, status, mesaje, durată, retry).  
+- GLN-Retailer lookup: CCCEDIGLNMAPPINGS (performanță, flexibilitate, mapări manuale).  
+- Control migrare retailer: CCCEDIRETAILERROUTING (PROCESS_IN_LEGACY flag).
+
+5. Migrație Controlată  
+- Shared download service: un singur downloader stochează raw XML, apoi routerește în legacy sau new.  
+- Începem cu retailerii noi (Sezamo, Auchan, Dedeman) pe sistemul nou; restul rămân pe legacy până la validare.  
+- Un switch global și un flag pe retailer permit în orice moment comutarea procesării.
+
+6. Principii Cheie  
+- Zero dependență de filesystem Heroku (totul în DB ERP).  
+- Implicit UBL 2.1: asumăm namespace-uri și structuri standard pentru majoritatea documentelor.  
+- Flexibilitate pentru cazuri speciale prin mapări custom.  
+- Logging și alertare detaliată pentru erori și antreținere.  
+- Scalabilitate pentru adăugarea de noi furnizori EDI și clienți.
+
+Această sinteză poate fi folosită de un agent AI pentru a genera:  
+- Diagrame de arhitectură, definiții de endpoint-uri S1 Web Services, specificații de FeathersJS services, componente Vue.js și script-uri de migrare SQL.
