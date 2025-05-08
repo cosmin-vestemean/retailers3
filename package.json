@@ -1,0 +1,17 @@
+{
+  "dependencies": {
+    "@feathersjs/authentication-client": "^5.0.34",
+    "@feathersjs/feathers": "^5.0.34",
+    "@feathersjs/socketio-client": "^5.0.34",
+    "axios": "^1.9.0",
+    "bulma": "^1.0.4",
+    "chart.js": "^4.4.9",
+    "date-fns": "^4.1.0",
+    "lodash": "^4.17.21",
+    "pinia": "^3.0.2",
+    "socket.io-client": "^4.8.1",
+    "vkbeautify": "^0.99.3",
+    "vue-chart-js": "^1.4.1",
+    "vue-json-tree": "^0.4.3"
+  }
+}
