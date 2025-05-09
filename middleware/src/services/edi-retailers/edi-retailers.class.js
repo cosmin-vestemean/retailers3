@@ -1,7 +1,7 @@
-// src/services/edi-connectors/edi-connectors.class.js
+// src/services/edi-retailers/edi-retailers.class.js
 import axios from 'axios';
 
-export class EdiConnectorsService {
+export class EdiRetailersService {
   constructor(options, app) {
     this.options = options || {};
     this.app = app;
