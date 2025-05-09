@@ -641,3 +641,94 @@ function getRetailersClient(params) {
         };
     }
 }
+
+/**
+ * Gets all EDI providers
+ * @param {Object} params Optional filters (ignored for now)
+ * @returns {Object} List of providers
+ */
+function getEdiProviders(params) {
+  try {
+    var query = "SELECT CCCEDIPROVIDER as id, NAME, CONNTYPE FROM CCCEDIPROVIDER ORDER BY NAME";
+    var ds = X.GETSQLDATASET(query);
+    var result = [];
+    ds.FIRST;
+    while (!ds.EOF) {
+      result.push({
+        id: ds.id,
+        name: ds.NAME,
+        conntype: ds.CONNTYPE
+      });
+      ds.NEXT;
+    }
+    return { success: true, data: result, total: result.length };
+  } catch (e) {
+    return { success: false, message: "Error retrieving EDI providers: " + e.message };
+  }
+}
+
+/**
+ * Gets a single EDI provider by ID
+ * @param {Object} params Object with id property
+ * @returns {Object} Single provider or error
+ */
+function getEdiProvider(params) {
+  try {
+    var id = params.id;
+    if (!id) {
+      return { success: false, message: "Provider ID is required" };
+    }
+    var query = "SELECT CCCEDIPROVIDER as id, NAME, CONNTYPE FROM CCCEDIPROVIDER WHERE CCCEDIPROVIDER = :1";
+    var ds = X.GETSQLDATASET(query, id);
+    if (ds.EOF) {
+      return { success: false, message: "Provider not found: " + id };
+    }
+    var provider = { id: ds.id, name: ds.NAME, conntype: ds.CONNTYPE };
+    return { success: true, data: provider };
+  } catch (e) {
+    return { success: false, message: "Error retrieving EDI provider: " + e.message };
+  }
+}
+
+/**
+ * Gets all connection types
+ * @param {Object} params Optional filters (ignored)
+ * @returns {Object} List of connection types
+ */
+function getConnTypes(params) {
+  try {
+    var query = "SELECT CCCCONNTYPE as id, NAME FROM CCCCONNTYPE ORDER BY NAME";
+    var ds = X.GETSQLDATASET(query);
+    var result = [];
+    ds.FIRST;
+    while (!ds.EOF) {
+      result.push({ id: ds.id, name: ds.NAME });
+      ds.NEXT;
+    }
+    return { success: true, data: result, total: result.length };
+  } catch (e) {
+    return { success: false, message: "Error retrieving connection types: " + e.message };
+  }
+}
+
+/**
+ * Gets a single connection type by ID
+ * @param {Object} params Object with id property
+ * @returns {Object} Single connection type or error
+ */
+function getConnType(params) {
+  try {
+    var id = params.id;
+    if (!id) {
+      return { success: false, message: "Connection type ID is required" };
+    }
+    var query = "SELECT CCCCONNTYPE as id, NAME FROM CCCCONNTYPE WHERE CCCCONNTYPE = :1";
+    var ds = X.GETSQLDATASET(query, id);
+    if (ds.EOF) {
+      return { success: false, message: "Connection type not found: " + id };
+    }
+    return { success: true, data: { id: ds.id, name: ds.NAME } };
+  } catch (e) {
+    return { success: false, message: "Error retrieving connection type: " + e.message };
+  }
+}
