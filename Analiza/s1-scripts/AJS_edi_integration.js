@@ -648,23 +648,23 @@ function getRetailersClient(params) {
  * @returns {Object} List of providers
  */
 function getEdiProviders(params) {
-  try {
-    var query = "SELECT CCCEDIPROVIDER as id, NAME, CONNTYPE FROM CCCEDIPROVIDER ORDER BY NAME";
-    var ds = X.GETSQLDATASET(query);
-    var result = [];
-    ds.FIRST;
-    while (!ds.EOF) {
-      result.push({
-        id: ds.id,
-        name: ds.NAME,
-        conntype: ds.CONNTYPE
-      });
-      ds.NEXT;
+    try {
+        var query = "SELECT CCCEDIPROVIDER as id, NAME, CONNTYPE FROM CCCEDIPROVIDER ORDER BY NAME";
+        var ds = X.GETSQLDATASET(query);
+        var result = [];
+        ds.FIRST;
+        while (!ds.EOF) {
+            result.push({
+                id: ds.id,
+                name: ds.NAME,
+                conntype: ds.CONNTYPE
+            });
+            ds.NEXT;
+        }
+        return { success: true, data: result, total: result.length };
+    } catch (e) {
+        return { success: false, message: "Error retrieving EDI providers: " + e.message };
     }
-    return { success: true, data: result, total: result.length };
-  } catch (e) {
-    return { success: false, message: "Error retrieving EDI providers: " + e.message };
-  }
 }
 
 /**
@@ -673,21 +673,21 @@ function getEdiProviders(params) {
  * @returns {Object} Single provider or error
  */
 function getEdiProvider(params) {
-  try {
-    var id = params.id;
-    if (!id) {
-      return { success: false, message: "Provider ID is required" };
+    try {
+        var id = params.id;
+        if (!id) {
+            return { success: false, message: "Provider ID is required" };
+        }
+        var query = "SELECT CCCEDIPROVIDER as id, NAME, CONNTYPE FROM CCCEDIPROVIDER WHERE CCCEDIPROVIDER = :1";
+        var ds = X.GETSQLDATASET(query, id);
+        if (ds.EOF) {
+            return { success: false, message: "Provider not found: " + id };
+        }
+        var provider = { id: ds.id, name: ds.NAME, conntype: ds.CONNTYPE };
+        return { success: true, data: provider };
+    } catch (e) {
+        return { success: false, message: "Error retrieving EDI provider: " + e.message };
     }
-    var query = "SELECT CCCEDIPROVIDER as id, NAME, CONNTYPE FROM CCCEDIPROVIDER WHERE CCCEDIPROVIDER = :1";
-    var ds = X.GETSQLDATASET(query, id);
-    if (ds.EOF) {
-      return { success: false, message: "Provider not found: " + id };
-    }
-    var provider = { id: ds.id, name: ds.NAME, conntype: ds.CONNTYPE };
-    return { success: true, data: provider };
-  } catch (e) {
-    return { success: false, message: "Error retrieving EDI provider: " + e.message };
-  }
 }
 
 /**
@@ -696,19 +696,19 @@ function getEdiProvider(params) {
  * @returns {Object} List of connection types
  */
 function getConnTypes(params) {
-  try {
-    var query = "SELECT CCCCONNTYPE as id, NAME FROM CCCCONNTYPE ORDER BY NAME";
-    var ds = X.GETSQLDATASET(query);
-    var result = [];
-    ds.FIRST;
-    while (!ds.EOF) {
-      result.push({ id: ds.id, name: ds.NAME });
-      ds.NEXT;
+    try {
+        var query = "SELECT CCCCONNTYPE as id, NAME FROM CCCCONNTYPE ORDER BY NAME";
+        var ds = X.GETSQLDATASET(query);
+        var result = [];
+        ds.FIRST;
+        while (!ds.EOF) {
+            result.push({ id: ds.id, name: ds.NAME });
+            ds.NEXT;
+        }
+        return { success: true, data: result, total: result.length };
+    } catch (e) {
+        return { success: false, message: "Error retrieving connection types: " + e.message };
     }
-    return { success: true, data: result, total: result.length };
-  } catch (e) {
-    return { success: false, message: "Error retrieving connection types: " + e.message };
-  }
 }
 
 /**
@@ -717,18 +717,775 @@ function getConnTypes(params) {
  * @returns {Object} Single connection type or error
  */
 function getConnType(params) {
-  try {
-    var id = params.id;
-    if (!id) {
-      return { success: false, message: "Connection type ID is required" };
+    try {
+        var id = params.id;
+        if (!id) {
+            return { success: false, message: "Connection type ID is required" };
+        }
+        var query = "SELECT CCCCONNTYPE as id, NAME FROM CCCCONNTYPE WHERE CCCCONNTYPE = :1";
+        var ds = X.GETSQLDATASET(query, id);
+        if (ds.EOF) {
+            return { success: false, message: "Connection type not found: " + id };
+        }
+        return { success: true, data: { id: ds.id, name: ds.NAME } };
+    } catch (e) {
+        return { success: false, message: "Error retrieving connection type: " + e.message };
     }
-    var query = "SELECT CCCCONNTYPE as id, NAME FROM CCCCONNTYPE WHERE CCCCONNTYPE = :1";
-    var ds = X.GETSQLDATASET(query, id);
-    if (ds.EOF) {
-      return { success: false, message: "Connection type not found: " + id };
+}
+
+/**
+ * Gets document-to-S1 mappings by retailer and client combination
+ * @param {Object} params Object with trdr_retailer and trdr_client properties
+ * @returns {Object} List of document mappings with success/error information
+ */
+function getDocumentMappingsByRetailerClient(params) {
+    try {
+        var retailerId = params.trdr_retailer;
+        var clientId = params.trdr_client;
+        var companyId = X.SYS.COMPANY;
+
+        // Validate required parameters
+        if (!retailerId) {
+            return { success: false, message: "Retailer ID (trdr_retailer) is required", params: { trdr_client: params.trdr_client, trdr_retailer: params.trdr_retailer } };
+        }
+
+        if (!clientId) {
+            return { success: false, message: "Client ID (trdr_client) is required", params: { trdr_client: params.trdr_client, trdr_retailer: params.trdr_retailer } };
+        }
+
+        // Build the query to get mappings by retailer and client
+        var query = "SELECT m.CCCDOCUMENTES1MAPPINGS as id, m.TRDR_RETAILER, m.TRDR_CLIENT, " +
+            "m.SOSOURCE, m.FPRMS, m.SERIES, m.INITIALDIRIN, m.INITIALDIROUT, " +
+            "m.DOCUMENT_TYPE, m.DIRECTION, m.AUTO_PROCESS, m.ACTIVE, m.TEST_MODE, " +
+            "m.XML_ROOT_PATH, m.HEADER_PATH, m.LINES_PATH, " +
+            "m.CREATED_DATE, m.MODIFIED_DATE, m.CREATED_BY, " +
+            "r.NAME as retailerName, c.NAME as clientName " +
+            "FROM CCCDOCUMENTES1MAPPINGS m " +
+            "LEFT JOIN TRDR r ON r.TRDR = m.TRDR_RETAILER AND r.COMPANY = " + companyId + " " +
+            "LEFT JOIN CCCRETAILERSCLIENTS c ON c.TRDR_CLIENT = m.TRDR_CLIENT " +
+            "WHERE m.TRDR_RETAILER = :1 AND m.TRDR_CLIENT = :2 " +
+            "ORDER BY m.DOCUMENT_TYPE, m.DIRECTION";
+
+        var ds = X.GETSQLDATASET(query, retailerId, clientId);
+
+        // Convert dataset to result array
+        var result = [];
+        ds.FIRST;
+        while (!ds.EOF) {
+            result.push({
+                id: ds.id,
+                trdr_retailer: ds.TRDR_RETAILER,
+                trdr_client: ds.TRDR_CLIENT,
+                sosource: ds.SOSOURCE,
+                fprms: ds.FPRMS,
+                series: ds.SERIES,
+                initialdirin: ds.INITIALDIRIN,
+                initialdirout: ds.INITIALDIROUT,
+                document_type: ds.DOCUMENT_TYPE,
+                direction: ds.DIRECTION,
+                auto_process: ds.AUTO_PROCESS,
+                active: ds.ACTIVE,
+                test_mode: ds.TEST_MODE,
+                xml_root_path: ds.XML_ROOT_PATH,
+                header_path: ds.HEADER_PATH,
+                lines_path: ds.LINES_PATH,
+                created_date: ds.CREATED_DATE,
+                modified_date: ds.MODIFIED_DATE,
+                created_by: ds.CREATED_BY,
+                retailerName: ds.retailerName,
+                clientName: ds.clientName
+            });
+            ds.NEXT;
+        }
+
+        return {
+            success: true,
+            data: result,
+            total: result.length,
+            params: {
+                trdr_retailer: params.trdr_retailer,
+                trdr_client: params.trdr_client
+            }
+        };
+    } catch (e) {
+        return {
+            success: false,
+            message: "Error retrieving document mappings: " + e.message,
+            params: {
+                trdr_retailer: params.trdr_retailer,
+                trdr_client: params.trdr_client
+            }
+        };
     }
-    return { success: true, data: { id: ds.id, name: ds.NAME } };
-  } catch (e) {
-    return { success: false, message: "Error retrieving connection type: " + e.message };
-  }
+}
+
+/**
+ * Gets a single document-to-S1 mapping by ID
+ * @param {Object} params Object with id property
+ * @returns {Object} Single document mapping with success/error information
+ */
+function getDocumentMapping(params) {
+    try {
+        var id = params.id;
+        var companyId = X.SYS.COMPANY;
+
+        // Validate ID
+        if (!id) {
+            return {
+                success: false,
+                message: "Mapping ID is required",
+                params: { id: params.id }
+            };
+        }
+
+        // Query mapping by ID
+        var query = "SELECT m.CCCDOCUMENTES1MAPPINGS as id, m.TRDR_RETAILER, m.TRDR_CLIENT, " +
+            "m.SOSOURCE, m.FPRMS, m.SERIES, m.INITIALDIRIN, m.INITIALDIROUT, " +
+            "m.DOCUMENT_TYPE, m.DIRECTION, m.AUTO_PROCESS, m.ACTIVE, m.TEST_MODE, " +
+            "m.XML_ROOT_PATH, m.HEADER_PATH, m.LINES_PATH, " +
+            "m.CREATED_DATE, m.MODIFIED_DATE, m.CREATED_BY, " +
+            "r.NAME as retailerName, c.NAME as clientName " +
+            "FROM CCCDOCUMENTES1MAPPINGS m " +
+            "LEFT JOIN TRDR r ON r.TRDR = m.TRDR_RETAILER AND r.COMPANY = " + companyId + " " +
+            "LEFT JOIN CCCRETAILERSCLIENTS c ON c.TRDR_CLIENT = m.TRDR_CLIENT " +
+            "WHERE m.CCCDOCUMENTES1MAPPINGS = :1";
+
+        var ds = X.GETSQLDATASET(query, id);
+
+        // Check if mapping exists
+        if (ds.RECORDCOUNT === 0) {
+            return {
+                success: false,
+                message: "Document mapping with ID " + id + " not found",
+                params: {
+                    id: params.id
+                }
+            };
+        }
+
+        // Create mapping object
+        var mapping = {
+            id: ds.id,
+            trdr_retailer: ds.TRDR_RETAILER,
+            trdr_client: ds.TRDR_CLIENT,
+            sosource: ds.SOSOURCE,
+            fprms: ds.FPRMS,
+            series: ds.SERIES,
+            initialdirin: ds.INITIALDIRIN,
+            initialdirout: ds.INITIALDIROUT,
+            document_type: ds.DOCUMENT_TYPE,
+            direction: ds.DIRECTION,
+            auto_process: ds.AUTO_PROCESS,
+            active: ds.ACTIVE,
+            test_mode: ds.TEST_MODE,
+            xml_root_path: ds.XML_ROOT_PATH,
+            header_path: ds.HEADER_PATH,
+            lines_path: ds.LINES_PATH,
+            created_date: ds.CREATED_DATE,
+            modified_date: ds.MODIFIED_DATE,
+            created_by: ds.CREATED_BY,
+            retailerName: ds.retailerName,
+            clientName: ds.clientName
+        };
+
+        return {
+            success: true,
+            data: mapping,
+            params: {
+                id: params.id
+            }
+        };
+    } catch (e) {
+        return {
+            success: false,
+            message: "Error retrieving document mapping: " + e.message,
+            params: {
+                id: params.id
+            }
+        };
+    }
+}
+
+/**
+ * Gets a specific document-to-S1 mapping by full mandatory criteria
+ * @param {Object} params Object with trdr_retailer, trdr_client, sosource, fprms, and series properties
+ * @returns {Object} Single document mapping with success/error information
+ */
+function getSpecificDocumentMapping(params) {
+    try {
+        var retailerId = params.trdr_retailer;
+        var clientId = params.trdr_client;
+        var sosource = params.sosource;
+        var fprms = params.fprms;
+        var series = params.series;
+        var companyId = X.SYS.COMPANY;
+
+        // Validate all required parameters
+        if (!retailerId) {
+            return { success: false, message: "Retailer ID (trdr_retailer) is required", params: { trdr_client: params.trdr_client, trdr_retailer: params.trdr_retailer, sosource: params.sosource, fprms: params.fprms, series: params.series } };
+        }
+
+        if (!clientId) {
+            return { success: false, message: "Client ID (trdr_client) is required", params: { trdr_client: params.trdr_client, trdr_retailer: params.trdr_retailer, sosource: params.sosource, fprms: params.fprms, series: params.series } };
+        }
+
+        if (!sosource) {
+            return { success: false, message: "Source (sosource) is required", params: { trdr_client: params.trdr_client, trdr_retailer: params.trdr_retailer, sosource: params.sosource, fprms: params.fprms, series: params.series } };
+        }
+
+        if (!fprms) {
+            return { success: false, message: "FPRMS is required", params: { trdr_client: params.trdr_client, trdr_retailer: params.trdr_retailer, sosource: params.sosource, fprms: params.fprms, series: params.series } };
+        }
+
+        if (!series) {
+            return { success: false, message: "Series is required", params: { trdr_client: params.trdr_client, trdr_retailer: params.trdr_retailer, sosource: params.sosource, fprms: params.fprms, series: params.series } };
+        }
+
+        // Build query with all mandatory parameters
+        var query = "SELECT m.CCCDOCUMENTES1MAPPINGS as id, m.TRDR_RETAILER, m.TRDR_CLIENT, " +
+            "m.SOSOURCE, m.FPRMS, m.SERIES, m.INITIALDIRIN, m.INITIALDIROUT, " +
+            "m.DOCUMENT_TYPE, m.DIRECTION, m.AUTO_PROCESS, m.ACTIVE, m.TEST_MODE, " +
+            "m.XML_ROOT_PATH, m.HEADER_PATH, m.LINES_PATH, " +
+            "m.CREATED_DATE, m.MODIFIED_DATE, m.CREATED_BY, " +
+            "r.NAME as retailerName, c.NAME as clientName " +
+            "FROM CCCDOCUMENTES1MAPPINGS m " +
+            "LEFT JOIN TRDR r ON r.TRDR = m.TRDR_RETAILER AND r.COMPANY = " + companyId + " " +
+            "LEFT JOIN CCCRETAILERSCLIENTS c ON c.TRDR_CLIENT = m.TRDR_CLIENT " +
+            "WHERE m.TRDR_RETAILER = :1 AND m.TRDR_CLIENT = :2 AND " +
+            "m.SOSOURCE = :3 AND m.FPRMS = :4 AND m.SERIES = :5";
+
+        // Execute query with parameters
+        var ds = X.GETSQLDATASET(query, retailerId, clientId, sosource, fprms, series);
+
+        // Check if mapping exists
+        if (ds.RECORDCOUNT === 0) {
+            return {
+                success: false,
+                message: "Document mapping not found for the specified criteria",
+                params: {
+                    trdr_retailer: params.trdr_retailer,
+                    trdr_client: params.trdr_client,
+                    sosource: params.sosource,
+                    fprms: params.fprms,
+                    series: params.series
+                }
+            };
+        }
+
+        // Create mapping object from first match
+        var mapping = {
+            id: ds.id,
+            trdr_retailer: ds.TRDR_RETAILER,
+            trdr_client: ds.TRDR_CLIENT,
+            sosource: ds.SOSOURCE,
+            fprms: ds.FPRMS,
+            series: ds.SERIES,
+            initialdirin: ds.INITIALDIRIN,
+            initialdirout: ds.INITIALDIROUT,
+            document_type: ds.DOCUMENT_TYPE,
+            direction: ds.DIRECTION,
+            auto_process: ds.AUTO_PROCESS,
+            active: ds.ACTIVE,
+            test_mode: ds.TEST_MODE,
+            xml_root_path: ds.XML_ROOT_PATH,
+            header_path: ds.HEADER_PATH,
+            lines_path: ds.LINES_PATH,
+            created_date: ds.CREATED_DATE,
+            modified_date: ds.MODIFIED_DATE,
+            created_by: ds.CREATED_BY,
+            retailerName: ds.retailerName,
+            clientName: ds.clientName
+        };
+
+        return {
+            success: true,
+            data: mapping,
+            params: {
+                trdr_retailer: retailerId,
+                trdr_client: clientId,
+                sosource: sosource,
+                fprms: fprms,
+                series: series
+            }
+        };
+    } catch (e) {
+        return {
+            success: false,
+            message: "Error retrieving specific document mapping: " + e.message,
+            params: {
+                trdr_retailer: params.trdr_retailer,
+                trdr_client: params.trdr_client,
+                sosource: params.sosource,
+                fprms: params.fprms,
+                series: params.series
+            }
+        };
+    }
+}
+
+/**
+ * Checks if a document mapping already exists for a particular combination of mandatory fields
+ * @param {Object} params Object with TRDR_RETAILER, TRDR_CLIENT, SOSOURCE, FPRMS, and SERIES
+ * @returns {Object} Object with exists flag, existing record (if found), and success/error information
+ */
+function checkDocumentMappingExists(params) {
+    try {
+        var retailerId = params.TRDR_RETAILER;
+        var clientId = params.TRDR_CLIENT;
+        var sosource = params.SOSOURCE;
+        var fprms = params.FPRMS;
+        var series = params.SERIES;
+        var companyId = X.SYS.COMPANY;
+
+        // Validate all required parameters
+        if (!retailerId) {
+            return {
+                success: false,
+                message: "Retailer ID (TRDR_RETAILER) is required",
+                params: {
+                    TRDR_RETAILER: params.TRDR_RETAILER,
+                    TRDR_CLIENT: params.TRDR_CLIENT,
+                    SOSOURCE: params.SOSOURCE,
+                    FPRMS: params.FPRMS,
+                    SERIES: params.SERIES
+                }
+            };
+        }
+
+        if (!clientId) {
+            return {
+                success: false,
+                message: "Client ID (TRDR_CLIENT) is required",
+                params: {
+                    TRDR_RETAILER: params.TRDR_RETAILER,
+                    TRDR_CLIENT: params.TRDR_CLIENT,
+                    SOSOURCE: params.SOSOURCE,
+                    FPRMS: params.FPRMS,
+                    SERIES: params.SERIES
+                }
+            };
+        }
+
+        if (!sosource) {
+            return {
+                success: false,
+                message: "Source (SOSOURCE) is required",
+                params: {
+                    TRDR_RETAILER: params.TRDR_RETAILER,
+                    TRDR_CLIENT: params.TRDR_CLIENT,
+                    SOSOURCE: params.SOSOURCE,
+                    FPRMS: params.FPRMS,
+                    SERIES: params.SERIES
+                }
+            };
+        }
+
+        if (!fprms) {
+            return {
+                success: false,
+                message: "FPRMS is required",
+                params: {
+                    TRDR_RETAILER: params.TRDR_RETAILER,
+                    TRDR_CLIENT: params.TRDR_CLIENT,
+                    SOSOURCE: params.SOSOURCE,
+                    FPRMS: params.FPRMS,
+                    SERIES: params.SERIES
+                }
+            };
+        }
+
+        if (!series) {
+            return {
+                success: false,
+                message: "SERIES is required",
+                params: {
+                    TRDR_RETAILER: params.TRDR_RETAILER,
+                    TRDR_CLIENT: params.TRDR_CLIENT,
+                    SOSOURCE: params.SOSOURCE,
+                    FPRMS: params.FPRMS,
+                    SERIES: params.SERIES
+                }
+            };
+        }
+
+        // Query for existing mapping with all five mandatory fields
+        var query = "SELECT m.CCCDOCUMENTES1MAPPINGS as id, m.TRDR_RETAILER, m.TRDR_CLIENT, " +
+            "m.SOSOURCE, m.FPRMS, m.SERIES, m.INITIALDIRIN, m.INITIALDIROUT, " +
+            "m.DOCUMENT_TYPE, m.DIRECTION, m.AUTO_PROCESS, m.ACTIVE, m.TEST_MODE, " +
+            "m.XML_ROOT_PATH, m.HEADER_PATH, m.LINES_PATH, " +
+            "r.NAME as retailerName, c.NAME as clientName " +
+            "FROM CCCDOCUMENTES1MAPPINGS m " +
+            "LEFT JOIN TRDR r ON r.TRDR = m.TRDR_RETAILER AND r.COMPANY = " + companyId + " " +
+            "LEFT JOIN CCCRETAILERSCLIENTS c ON c.TRDR_CLIENT = m.TRDR_CLIENT " +
+            "WHERE m.TRDR_RETAILER = :1 AND m.TRDR_CLIENT = :2 AND " +
+            "m.SOSOURCE = :3 AND m.FPRMS = :4 AND m.SERIES = :5";
+
+        var ds = X.GETSQLDATASET(query, retailerId, clientId, sosource, fprms, series);
+
+        // Check if we found a match
+        var exists = ds.RECORDCOUNT > 0;
+        var existing = null;
+
+        // If exists, create mapping object from the record
+        if (exists) {
+            existing = {
+                id: ds.id,
+                trdr_retailer: ds.TRDR_RETAILER,
+                trdr_client: ds.TRDR_CLIENT,
+                sosource: ds.SOSOURCE,
+                fprms: ds.FPRMS,
+                series: ds.SERIES,
+                initialdirin: ds.INITIALDIRIN,
+                initialdirout: ds.INITIALDIROUT,
+                document_type: ds.DOCUMENT_TYPE,
+                direction: ds.DIRECTION,
+                auto_process: ds.AUTO_PROCESS,
+                active: ds.ACTIVE,
+                test_mode: ds.TEST_MODE,
+                xml_root_path: ds.XML_ROOT_PATH,
+                header_path: ds.HEADER_PATH,
+                lines_path: ds.LINES_PATH,
+                retailerName: ds.retailerName,
+                clientName: ds.clientName
+            };
+        }
+
+        return {
+            success: true,
+            exists: exists,
+            existing: existing,
+            params: {
+                TRDR_RETAILER: params.TRDR_RETAILER,
+                TRDR_CLIENT: params.TRDR_CLIENT,
+                SOSOURCE: params.SOSOURCE,
+                FPRMS: params.FPRMS,
+                SERIES: params.SERIES
+            }
+        };
+    } catch (e) {
+        return {
+            success: false,
+            message: "Error checking if document mapping exists: " + e.message,
+            params: {
+                TRDR_RETAILER: params.TRDR_RETAILER,
+                TRDR_CLIENT: params.TRDR_CLIENT,
+                SOSOURCE: params.SOSOURCE,
+                FPRMS: params.FPRMS,
+                SERIES: params.SERIES
+            }
+        };
+    }
+}
+
+/**
+ * Creates a new document-to-S1 mapping
+ * @param {Object} params Mapping data
+ * @returns {Object} Result with success/error information and new mapping ID
+ */
+function createDocumentMapping(params) {
+    try {
+        // Validate required fields
+        if (!params.TRDR_RETAILER) {
+            return { success: false, message: "TRDR_RETAILER is required" };
+        }
+
+        if (!params.TRDR_CLIENT) {
+            return { success: false, message: "TRDR_CLIENT is required" };
+        }
+
+        if (!params.SOSOURCE) {
+            return { success: false, message: "SOSOURCE is required" };
+        }
+
+        if (!params.FPRMS) {
+            return { success: false, message: "FPRMS is required" };
+        }
+
+        if (!params.SERIES) {
+            return { success: false, message: "SERIES is required" };
+        }
+
+        if (!params.DOCUMENT_TYPE) {
+            return { success: false, message: "DOCUMENT_TYPE is required" };
+        }
+
+        if (!params.DIRECTION) {
+            return { success: false, message: "DIRECTION is required" };
+        }
+
+        // Check if mapping already exists
+        var existsCheck = checkDocumentMappingExists({
+            TRDR_RETAILER: params.TRDR_RETAILER,
+            DOCUMENT_TYPE: params.DOCUMENT_TYPE,
+            DIRECTION: params.DIRECTION
+        });
+
+        if (existsCheck.exists) {
+            return {
+                success: false,
+                message: "Document mapping already exists for retailer " + params.TRDR_RETAILER +
+                    " with document type " + params.DOCUMENT_TYPE + " and direction " + params.DIRECTION
+            };
+        }
+
+        // Prepare insert statement
+        var sqlInsert = "INSERT INTO CCCDOCUMENTES1MAPPINGS (TRDR_RETAILER, TRDR_CLIENT, SOSOURCE, FPRMS, SERIES, " +
+            "INITIALDIRIN, INITIALDIROUT, DOCUMENT_TYPE, DIRECTION, AUTO_PROCESS, ACTIVE, TEST_MODE, " +
+            "XML_ROOT_PATH, HEADER_PATH, LINES_PATH, CREATED_DATE, CREATED_BY) " +
+            "VALUES (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, GETDATE(), :16); " +
+            "SELECT SCOPE_IDENTITY() AS new_id;";
+
+        // Execute insert
+        var newId = X.SQL(sqlInsert,
+            params.TRDR_RETAILER,
+            params.TRDR_CLIENT,
+            params.SOSOURCE,
+            params.FPRMS,
+            params.SERIES,
+            params.INITIALDIRIN || '',
+            params.INITIALDIROUT || '',
+            params.DOCUMENT_TYPE,
+            params.DIRECTION,
+            params.AUTO_PROCESS !== undefined ? params.AUTO_PROCESS : 1,
+            params.ACTIVE !== undefined ? params.ACTIVE : 1,
+            params.TEST_MODE !== undefined ? params.TEST_MODE : 0,
+            params.XML_ROOT_PATH || '',
+            params.HEADER_PATH || '',
+            params.LINES_PATH || '',
+            params.CREATED_BY || 'API'
+        );
+
+        // Return success with new ID
+        return {
+            success: true,
+            message: "Document mapping created successfully",
+            id: parseInt(newId)
+        };
+    } catch (e) {
+        return {
+            success: false,
+            message: "Error creating document mapping: " + e.message
+        };
+    }
+}
+
+/**
+ * Updates an existing document-to-S1 mapping
+ * @param {Object} params Mapping data with CCCDOCUMENTES1MAPPINGS (id)
+ * @returns {Object} Result with success/error information
+ */
+function updateDocumentMapping(params) {
+    try {
+        // Validate ID
+        if (!params.CCCDOCUMENTES1MAPPINGS) {
+            return { success: false, message: "Mapping ID is required" };
+        }
+
+        // Check if mapping exists
+        var query = "SELECT COUNT(*) as cnt FROM CCCDOCUMENTES1MAPPINGS WHERE CCCDOCUMENTES1MAPPINGS = :1";
+        var count = X.SQL(query, params.CCCDOCUMENTES1MAPPINGS);
+
+        if (parseInt(count) === 0) {
+            return {
+                success: false,
+                message: "Document mapping with ID " + params.CCCDOCUMENTES1MAPPINGS + " not found"
+            };
+        }
+
+        // If all five key fields are present, check if another record exists with the same values
+        if (params.TRDR_RETAILER !== undefined &&
+            params.TRDR_CLIENT !== undefined &&
+            params.SOSOURCE !== undefined &&
+            params.FPRMS !== undefined &&
+            params.SERIES !== undefined) {
+
+            var existsQuery = "SELECT COUNT(*) as cnt FROM CCCDOCUMENTES1MAPPINGS " +
+                "WHERE TRDR_RETAILER = :1 AND TRDR_CLIENT = :2 AND " +
+                "SOSOURCE = :3 AND FPRMS = :4 AND SERIES = :5 AND " +
+                "CCCDOCUMENTES1MAPPINGS != :6";
+
+            var existsCount = X.SQL(existsQuery,
+                params.TRDR_RETAILER,
+                params.TRDR_CLIENT,
+                params.SOSOURCE,
+                params.FPRMS,
+                params.SERIES,
+                params.CCCDOCUMENTES1MAPPINGS);
+
+            if (parseInt(existsCount) > 0) {
+                return {
+                    success: false,
+                    message: "Another document mapping already exists with the same retailer, client, source, FPRMS and series combination"
+                };
+            }
+        }
+
+        // Build update statement with only defined fields
+        var updateFields = [];
+        var updateSql = "UPDATE CCCDOCUMENTES1MAPPINGS SET ";
+        var paramCounter = 2; // Starting from 2 since ID is param 1
+
+        // Add all updateable fields
+        var fields = [
+            { name: "TRDR_RETAILER", value: params.TRDR_RETAILER },
+            { name: "TRDR_CLIENT", value: params.TRDR_CLIENT },
+            { name: "SOSOURCE", value: params.SOSOURCE },
+            { name: "FPRMS", value: params.FPRMS },
+            { name: "SERIES", value: params.SERIES },
+            { name: "INITIALDIRIN", value: params.INITIALDIRIN },
+            { name: "INITIALDIROUT", value: params.INITIALDIROUT },
+            { name: "DOCUMENT_TYPE", value: params.DOCUMENT_TYPE },
+            { name: "DIRECTION", value: params.DIRECTION },
+            { name: "AUTO_PROCESS", value: params.AUTO_PROCESS },
+            { name: "ACTIVE", value: params.ACTIVE },
+            { name: "TEST_MODE", value: params.TEST_MODE },
+            { name: "XML_ROOT_PATH", value: params.XML_ROOT_PATH },
+            { name: "HEADER_PATH", value: params.HEADER_PATH },
+            { name: "LINES_PATH", value: params.LINES_PATH }
+        ];
+
+        // Add each field if present
+        for (var i = 0; i < fields.length; i++) {
+            if (fields[i].value !== undefined) {
+                updateSql += fields[i].name + " = :" + paramCounter + ", ";
+                updateFields.push(fields[i].value);
+                paramCounter++;
+            }
+        }
+
+        // Always add modified date
+        updateSql += "MODIFIED_DATE = GETDATE()";
+
+        // If no fields to update besides modified date, return success
+        if (updateFields.length === 0) {
+            // Simple update just for the modified date
+            X.RUNSQL("UPDATE CCCDOCUMENTES1MAPPINGS SET MODIFIED_DATE = GETDATE() WHERE CCCDOCUMENTES1MAPPINGS = :1", params.CCCDOCUMENTES1MAPPINGS);
+
+            return {
+                success: true,
+                message: "Document mapping updated successfully (modified date only)"
+            };
+        }
+
+        // Add WHERE clause
+        updateSql += " WHERE CCCDOCUMENTES1MAPPINGS = :1";
+
+        // Create parameter array with ID as first parameter
+        var sqlParams = [params.CCCDOCUMENTES1MAPPINGS];
+
+        // Add all update field values
+        for (var j = 0; j < updateFields.length; j++) {
+            sqlParams.push(updateFields[j]);
+        }
+
+        // Execute update with dynamic number of parameters
+        switch (updateFields.length) {
+            case 1:
+                X.RUNSQL(updateSql, sqlParams[0], sqlParams[1]);
+                break;
+            case 2:
+                X.RUNSQL(updateSql, sqlParams[0], sqlParams[1], sqlParams[2]);
+                break;
+            case 3:
+                X.RUNSQL(updateSql, sqlParams[0], sqlParams[1], sqlParams[2], sqlParams[3]);
+                break;
+            case 4:
+                X.RUNSQL(updateSql, sqlParams[0], sqlParams[1], sqlParams[2], sqlParams[3], sqlParams[4]);
+                break;
+            case 5:
+                X.RUNSQL(updateSql, sqlParams[0], sqlParams[1], sqlParams[2], sqlParams[3], sqlParams[4], sqlParams[5]);
+                break;
+            case 6:
+                X.RUNSQL(updateSql, sqlParams[0], sqlParams[1], sqlParams[2], sqlParams[3], sqlParams[4], sqlParams[5], sqlParams[6]);
+                break;
+            case 7:
+                X.RUNSQL(updateSql, sqlParams[0], sqlParams[1], sqlParams[2], sqlParams[3], sqlParams[4], sqlParams[5], sqlParams[6], sqlParams[7]);
+                break;
+            case 8:
+                X.RUNSQL(updateSql, sqlParams[0], sqlParams[1], sqlParams[2], sqlParams[3], sqlParams[4], sqlParams[5], sqlParams[6], sqlParams[7], sqlParams[8]);
+                break;
+            case 9:
+                X.RUNSQL(updateSql, sqlParams[0], sqlParams[1], sqlParams[2], sqlParams[3], sqlParams[4], sqlParams[5], sqlParams[6], sqlParams[7], sqlParams[8], sqlParams[9]);
+                break;
+            case 10:
+                X.RUNSQL(updateSql, sqlParams[0], sqlParams[1], sqlParams[2], sqlParams[3], sqlParams[4], sqlParams[5], sqlParams[6], sqlParams[7], sqlParams[8], sqlParams[9], sqlParams[10]);
+                break;
+            case 11:
+                X.RUNSQL(updateSql, sqlParams[0], sqlParams[1], sqlParams[2], sqlParams[3], sqlParams[4], sqlParams[5], sqlParams[6], sqlParams[7], sqlParams[8], sqlParams[9], sqlParams[10], sqlParams[11]);
+                break;
+            case 12:
+                X.RUNSQL(updateSql, sqlParams[0], sqlParams[1], sqlParams[2], sqlParams[3], sqlParams[4], sqlParams[5], sqlParams[6], sqlParams[7], sqlParams[8], sqlParams[9], sqlParams[10], sqlParams[11], sqlParams[12]);
+                break;
+            case 13:
+                X.RUNSQL(updateSql, sqlParams[0], sqlParams[1], sqlParams[2], sqlParams[3], sqlParams[4], sqlParams[5], sqlParams[6], sqlParams[7], sqlParams[8], sqlParams[9], sqlParams[10], sqlParams[11], sqlParams[12], sqlParams[13]);
+                break;
+            case 14:
+                X.RUNSQL(updateSql, sqlParams[0], sqlParams[1], sqlParams[2], sqlParams[3], sqlParams[4], sqlParams[5], sqlParams[6], sqlParams[7], sqlParams[8], sqlParams[9], sqlParams[10], sqlParams[11], sqlParams[12], sqlParams[13], sqlParams[14]);
+                break;
+            case 15:
+                X.RUNSQL(updateSql, sqlParams[0], sqlParams[1], sqlParams[2], sqlParams[3], sqlParams[4], sqlParams[5], sqlParams[6], sqlParams[7], sqlParams[8], sqlParams[9], sqlParams[10], sqlParams[11], sqlParams[12], sqlParams[13], sqlParams[14], sqlParams[15]);
+                break;
+        }
+
+        return {
+            success: true,
+            message: "Document mapping updated successfully"
+        };
+    } catch (e) {
+        return {
+            success: false,
+            message: "Error updating document mapping: " + e.message
+        };
+    }
+}
+
+/**
+* Deletes a document-to-S1 mapping
+* @param {Object} params Object with id property
+* @returns {Object} Result with success/error information
+*/
+function deleteDocumentMapping(params) {
+    try {
+        var id = params.id;
+
+        // Validate ID
+        if (!id) {
+            return { success: false, message: "Mapping ID is required" };
+        }
+
+        // Check if mapping exists
+        var query = "SELECT COUNT(*) as cnt FROM CCCDOCUMENTES1MAPPINGS WHERE CCCDOCUMENTES1MAPPINGS = :1";
+        var count = X.SQL(query, id);
+
+        if (parseInt(count) === 0) {
+            return {
+                success: false,
+                message: "Document mapping with ID " + id + " not found"
+            };
+        }
+
+        // Check for related field mappings
+        var fieldMappingsQuery = "SELECT COUNT(*) as cnt FROM CCCXMLS1MAPPINGS WHERE CCCDOCUMENTES1MAPPINGS = :1";
+        var fieldMappingsCount = X.SQL(fieldMappingsQuery, id);
+
+        if (parseInt(fieldMappingsCount) > 0) {
+            // Delete related field mappings first
+            var deleteFieldMappings = "DELETE FROM CCCXMLS1MAPPINGS WHERE CCCDOCUMENTES1MAPPINGS = :1";
+            X.RUNSQL(deleteFieldMappings, id);
+        }
+
+        // Delete the document mapping
+        var sqlDelete = "DELETE FROM CCCDOCUMENTES1MAPPINGS WHERE CCCDOCUMENTES1MAPPINGS = :1";
+        X.RUNSQL(sqlDelete, id);
+
+        return {
+            success: true,
+            message: "Document mapping deleted successfully"
+        };
+    } catch (e) {
+        return {
+            success: false,
+            message: "Error deleting document mapping: " + e.message
+        };
+    }
 }
