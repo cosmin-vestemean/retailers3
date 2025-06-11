@@ -172,13 +172,19 @@ export class FieldMappingsService {
             clientID: clientID,
             appId: this.s1Config.appId,
             OBJECT: object.toUpperCase()
-        };
-
-        const response = await axios.post(
+        };        const response = await axios.post(
             `${this.baseUrl}`,
             tablesData,
             { headers: { 'Content-Type': 'application/json' } }
         );
+
+        // Filter out tables with empty dbname
+        if (response.data && response.data.tables) {
+            response.data.tables = response.data.tables.filter(table => 
+                table.dbname && table.dbname.trim() !== ''
+            );
+            response.data.count = response.data.tables.length;
+        }
 
         return response.data;
     }    // GET /field-mappings/s1-fields?object=SALDOC&table=FINDOC

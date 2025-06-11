@@ -1356,7 +1356,7 @@ function updateDocumentMapping(params) {
         // Always add modified date
         updateSql += "MODIFIED_DATE = GETDATE()";
 
-        // If no fields to update besides modified date, return success
+        // If no fields to update, return success
         if (updateFields.length === 0) {
             // Simple update just for the modified date
             X.RUNSQL("UPDATE CCCDOCUMENTES1MAPPINGS SET MODIFIED_DATE = GETDATE() WHERE CCCDOCUMENTES1MAPPINGS = :1", params.CCCDOCUMENTES1MAPPINGS);
@@ -1440,10 +1440,10 @@ function updateDocumentMapping(params) {
 }
 
 /**
-* Deletes a document-to-S1 mapping
-* @param {Object} params Object with id property
-* @returns {Object} Result with success/error information
-*/
+ * Deletes a document-to-S1 mapping
+ * @param {Object} params Object with id property
+ * @returns {Object} Result with success/error information
+ */
 function deleteDocumentMapping(params) {
     try {
         var id = params.id;
@@ -1486,6 +1486,422 @@ function deleteDocumentMapping(params) {
         return {
             success: false,
             message: "Error deleting document mapping: " + e.message
+        };
+    }
+}
+
+/**
+ * Gets field mappings by document mapping ID
+ * @param {Object} params Object with document_mapping_id property
+ * @returns {Object} List of field mappings with success/error information
+ */
+function getFieldMappings(params) {
+    try {
+        var documentMappingId = params.document_mapping_id;
+        var companyId = X.SYS.COMPANY;
+
+        // Validate document mapping ID
+        if (!documentMappingId) {
+            return {
+                success: false,
+                message: "Document mapping ID is required"
+            };
+        }
+
+        // Query field mappings by document mapping ID
+        var query = "SELECT f.CCCXMLS1MAPPINGS as id, f.CCCDOCUMENTES1MAPPINGS, " +
+            "COALESCE(f.XML_PATH, f.XMLNODE) as xml_path, " +
+            "COALESCE(f.S1_TABLE, f.S1TABLE1) as s1_table, " +
+            "COALESCE(f.S1_FIELD, f.S1FIELD1) as s1_field, " +
+            "f.TRANSFORMATION_RULE, f.VALIDATION_RULE, f.DEFAULT_VALUE, " +
+            "COALESCE(f.IS_REQUIRED, f.MANDATORY, 0) as is_required, " +
+            "COALESCE(f.ACTIVE, 1) as active, " +
+            "f.CREATED_DATE, f.MODIFIED_DATE, f.CREATED_BY, " +
+            "d.DOCUMENT_TYPE, d.DIRECTION, r.NAME as retailerName, c.NAME as clientName " +
+            "FROM CCCXMLS1MAPPINGS f " +
+            "INNER JOIN CCCDOCUMENTES1MAPPINGS d ON d.CCCDOCUMENTES1MAPPINGS = f.CCCDOCUMENTES1MAPPINGS " +
+            "LEFT JOIN TRDR r ON r.TRDR = d.TRDR_RETAILER AND r.COMPANY = " + companyId + " " +
+            "LEFT JOIN CCCRETAILERSCLIENTS c ON c.TRDR_CLIENT = d.TRDR_CLIENT " +
+            "WHERE f.CCCDOCUMENTES1MAPPINGS = :1 " +
+            "ORDER BY COALESCE(f.XML_PATH, f.XMLNODE)";
+
+        var ds = X.GETSQLDATASET(query, documentMappingId);
+
+        // Convert dataset to result array
+        var result = [];
+        ds.FIRST;
+        while (!ds.EOF) {
+            result.push({
+                id: ds.id,
+                document_mapping_id: ds.CCCDOCUMENTES1MAPPINGS,
+                xml_path: ds.xml_path,
+                s1_table: ds.s1_table,
+                s1_field: ds.s1_field,
+                transformation_rule: ds.TRANSFORMATION_RULE,
+                validation_rule: ds.VALIDATION_RULE,
+                default_value: ds.DEFAULT_VALUE,
+                is_required: ds.is_required,
+                active: ds.active,
+                created_date: ds.CREATED_DATE,
+                modified_date: ds.MODIFIED_DATE,
+                created_by: ds.CREATED_BY,
+                document_type: ds.DOCUMENT_TYPE,
+                direction: ds.DIRECTION,
+                retailerName: ds.retailerName,
+                clientName: ds.clientName
+            });
+            ds.NEXT;
+        }
+
+        return {
+            success: true,
+            data: result,
+            total: result.length
+        };
+    } catch (e) {
+        return {
+            success: false,
+            message: "Error retrieving field mappings: " + e.message
+        };
+    }
+}
+
+/**
+ * Gets a single field mapping by ID
+ * @param {Object} params Object with id property
+ * @returns {Object} Single field mapping with success/error information
+ */
+function getFieldMapping(params) {
+    try {
+        var id = params.id;
+        var companyId = X.SYS.COMPANY;
+
+        // Validate ID
+        if (!id) {
+            return {
+                success: false,
+                message: "Field mapping ID is required"
+            };
+        }
+
+        // Query field mapping by ID
+        var query = "SELECT f.CCCXMLS1MAPPINGS as id, f.CCCDOCUMENTES1MAPPINGS, " +
+            "COALESCE(f.XML_PATH, f.XMLNODE) as xml_path, " +
+            "COALESCE(f.S1_TABLE, f.S1TABLE1) as s1_table, " +
+            "COALESCE(f.S1_FIELD, f.S1FIELD1) as s1_field, " +
+            "f.TRANSFORMATION_RULE, f.VALIDATION_RULE, f.DEFAULT_VALUE, " +
+            "COALESCE(f.IS_REQUIRED, f.MANDATORY, 0) as is_required, " +
+            "COALESCE(f.ACTIVE, 1) as active, " +
+            "f.CREATED_DATE, f.MODIFIED_DATE, f.CREATED_BY, " +
+            "d.DOCUMENT_TYPE, d.DIRECTION, r.NAME as retailerName, c.NAME as clientName " +
+            "FROM CCCXMLS1MAPPINGS f " +
+            "INNER JOIN CCCDOCUMENTES1MAPPINGS d ON d.CCCDOCUMENTES1MAPPINGS = f.CCCDOCUMENTES1MAPPINGS " +
+            "LEFT JOIN TRDR r ON r.TRDR = d.TRDR_RETAILER AND r.COMPANY = " + companyId + " " +
+            "LEFT JOIN CCCRETAILERSCLIENTS c ON c.TRDR_CLIENT = d.TRDR_CLIENT " +
+            "WHERE f.CCCXMLS1MAPPINGS = :1";
+
+        var ds = X.GETSQLDATASET(query, id);
+
+        // Check if field mapping exists
+        if (ds.EOF) {
+            return {
+                success: false,
+                message: "Field mapping with ID " + id + " not found"
+            };
+        }
+
+        // Create field mapping object
+        var mapping = {
+            id: ds.id,
+            document_mapping_id: ds.CCCDOCUMENTES1MAPPINGS,
+            xml_path: ds.xml_path,
+            s1_table: ds.s1_table,
+            s1_field: ds.s1_field,
+            transformation_rule: ds.TRANSFORMATION_RULE,
+            validation_rule: ds.VALIDATION_RULE,
+            default_value: ds.DEFAULT_VALUE,
+            is_required: ds.is_required,
+            active: ds.active,
+            created_date: ds.CREATED_DATE,
+            modified_date: ds.MODIFIED_DATE,
+            created_by: ds.CREATED_BY,
+            document_type: ds.DOCUMENT_TYPE,
+            direction: ds.DIRECTION,
+            retailerName: ds.retailerName,
+            clientName: ds.clientName
+        };
+
+        return {
+            success: true,
+            data: mapping
+        };
+    } catch (e) {
+        return {
+            success: false,
+            message: "Error retrieving field mapping: " + e.message
+        };
+    }
+}
+
+/**
+ * Creates a new field mapping
+ * @param {Object} params Field mapping data
+ * @returns {Object} Result with success/error information and new mapping ID
+ */
+function createFieldMapping(params) {
+    try {
+        // Validate required fields
+        if (!params.CCCDOCUMENTES1MAPPINGS) {
+            return { success: false, message: "Document mapping ID (CCCDOCUMENTES1MAPPINGS) is required" };
+        }
+
+        if (!params.XML_PATH) {
+            return { success: false, message: "XML path (XML_PATH) is required" };
+        }
+
+        if (!params.S1_TABLE) {
+            return { success: false, message: "S1 table (S1_TABLE) is required" };
+        }
+
+        if (!params.S1_FIELD) {
+            return { success: false, message: "S1 field (S1_FIELD) is required" };
+        }
+
+        // Check if document mapping exists
+        var docQuery = "SELECT COUNT(*) as cnt FROM CCCDOCUMENTES1MAPPINGS WHERE CCCDOCUMENTES1MAPPINGS = :1";
+        var docCount = X.SQL(docQuery, params.CCCDOCUMENTES1MAPPINGS);
+
+        if (parseInt(docCount) === 0) {
+            return {
+                success: false,
+                message: "Document mapping with ID " + params.CCCDOCUMENTES1MAPPINGS + " not found"
+            };
+        }
+
+        // Check if field mapping already exists for this document mapping and XML path
+        var existsQuery = "SELECT COUNT(*) as cnt FROM CCCXMLS1MAPPINGS " +
+            "WHERE CCCDOCUMENTES1MAPPINGS = :1 AND " +
+            "(XML_PATH = :2 OR XMLNODE = :2)";
+        var existsCount = X.SQL(existsQuery, params.CCCDOCUMENTES1MAPPINGS, params.XML_PATH);
+
+        if (parseInt(existsCount) > 0) {
+            return {
+                success: false,
+                message: "Field mapping already exists for XML path " + params.XML_PATH +
+                    " in document mapping " + params.CCCDOCUMENTES1MAPPINGS
+            };
+        }
+
+        // Prepare insert statement - using both old and new columns for compatibility
+        var sqlInsert = "INSERT INTO CCCXMLS1MAPPINGS " +
+            "(CCCDOCUMENTES1MAPPINGS, XMLNODE, XML_PATH, S1TABLE1, S1_TABLE, S1FIELD1, S1_FIELD, " +
+            "TRANSFORMATION_RULE, VALIDATION_RULE, DEFAULT_VALUE, MANDATORY, IS_REQUIRED, " +
+            "ACTIVE, CREATED_DATE, CREATED_BY) " +
+            "VALUES (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, GETDATE(), :14); " +
+            "SELECT SCOPE_IDENTITY() AS new_id;";
+
+        // Execute insert
+        var newId = X.SQL(sqlInsert,
+            params.CCCDOCUMENTES1MAPPINGS,
+            params.XML_PATH, // XMLNODE (old column)
+            params.XML_PATH, // XML_PATH (new column)
+            params.S1_TABLE, // S1TABLE1 (old column)
+            params.S1_TABLE, // S1_TABLE (new column)
+            params.S1_FIELD, // S1FIELD1 (old column)
+            params.S1_FIELD, // S1_FIELD (new column)
+            params.TRANSFORMATION_RULE || null,
+            params.VALIDATION_RULE || null,
+            params.DEFAULT_VALUE || null,
+            params.IS_REQUIRED ? 1 : 0, // MANDATORY (old column)
+            params.IS_REQUIRED ? 1 : 0, // IS_REQUIRED (new column)
+            params.ACTIVE !== undefined ? (params.ACTIVE ? 1 : 0) : 1,
+            params.CREATED_BY || 'API'
+        );
+
+        // Return success with new ID
+        return {
+            success: true,
+            message: "Field mapping created successfully",
+            id: parseInt(newId)
+        };
+    } catch (e) {
+        return {
+            success: false,
+            message: "Error creating field mapping: " + e.message
+        };
+    }
+}
+
+/**
+ * Updates an existing field mapping
+ * @param {Object} params Field mapping data with CCCXMLS1MAPPINGS (id)
+ * @returns {Object} Result with success/error information
+ */
+function updateFieldMapping(params) {
+    try {
+        // Validate ID
+        if (!params.CCCXMLS1MAPPINGS) {
+            return { success: false, message: "Field mapping ID is required" };
+        }
+
+        // Check if field mapping exists
+        var query = "SELECT COUNT(*) as cnt FROM CCCXMLS1MAPPINGS WHERE CCCXMLS1MAPPINGS = :1";
+        var count = X.SQL(query, params.CCCXMLS1MAPPINGS);
+
+        if (parseInt(count) === 0) {
+            return {
+                success: false,
+                message: "Field mapping with ID " + params.CCCXMLS1MAPPINGS + " not found"
+            };
+        }
+
+        // Build update statement with only defined fields - updating both old and new columns
+        var updateFields = [];
+        var updateSql = "UPDATE CCCXMLS1MAPPINGS SET ";
+
+        // XML_PATH
+        if (params.XML_PATH !== undefined) {
+            updateSql += "XML_PATH = :2, XMLNODE = :2, ";
+            updateFields.push(params.XML_PATH);
+        }
+
+        // S1_TABLE
+        if (params.S1_TABLE !== undefined) {
+            updateSql += "S1_TABLE = :" + (updateFields.length + 2) + ", S1TABLE1 = :" + (updateFields.length + 2) + ", ";
+            updateFields.push(params.S1_TABLE);
+        }
+
+        // S1_FIELD
+        if (params.S1_FIELD !== undefined) {
+            updateSql += "S1_FIELD = :" + (updateFields.length + 2) + ", S1FIELD1 = :" + (updateFields.length + 2) + ", ";
+            updateFields.push(params.S1_FIELD);
+        }
+
+        // TRANSFORMATION_RULE
+        if (params.TRANSFORMATION_RULE !== undefined) {
+            updateSql += "TRANSFORMATION_RULE = :" + (updateFields.length + 2) + ", ";
+            updateFields.push(params.TRANSFORMATION_RULE);
+        }
+
+        // VALIDATION_RULE
+        if (params.VALIDATION_RULE !== undefined) {
+            updateSql += "VALIDATION_RULE = :" + (updateFields.length + 2) + ", ";
+            updateFields.push(params.VALIDATION_RULE);
+        }
+
+        // DEFAULT_VALUE
+        if (params.DEFAULT_VALUE !== undefined) {
+            updateSql += "DEFAULT_VALUE = :" + (updateFields.length + 2) + ", ";
+            updateFields.push(params.DEFAULT_VALUE);
+        }
+
+        // IS_REQUIRED
+        if (params.IS_REQUIRED !== undefined) {
+            var requiredValue = params.IS_REQUIRED ? 1 : 0;
+            updateSql += "IS_REQUIRED = :" + (updateFields.length + 2) + ", MANDATORY = :" + (updateFields.length + 2) + ", ";
+            updateFields.push(requiredValue);
+        }
+
+        // ACTIVE
+        if (params.ACTIVE !== undefined) {
+            updateSql += "ACTIVE = :" + (updateFields.length + 2) + ", ";
+            updateFields.push(params.ACTIVE ? 1 : 0);
+        }
+
+        // Always add modified date
+
+        updateSql += "MODIFIED_DATE = GETDATE()";
+
+        // If no fields to update besides modified date, return success
+        if (updateFields.length === 0) {
+            // Simple update just for the modified date
+            X.RUNSQL("UPDATE CCCXMLS1MAPPINGS SET MODIFIED_DATE = GETDATE() WHERE CCCXMLS1MAPPINGS = :1", params.CCCXMLS1MAPPINGS);
+            return {
+                success: true,
+                message: "Field mapping updated successfully (modified date only)"
+            };
+        }
+
+        // Add WHERE clause
+        updateSql += " WHERE CCCXMLS1MAPPINGS = :1";
+
+        // Execute update with dynamic number of parameters
+        switch (updateFields.length) {
+            case 1:
+                X.RUNSQL(updateSql, params.CCCXMLS1MAPPINGS, updateFields[0]);
+                break;
+            case 2:
+                X.RUNSQL(updateSql, params.CCCXMLS1MAPPINGS, updateFields[0], updateFields[1]);
+                break;
+            case 3:
+                X.RUNSQL(updateSql, params.CCCXMLS1MAPPINGS, updateFields[0], updateFields[1], updateFields[2]);
+                break;
+            case 4:
+                X.RUNSQL(updateSql, params.CCCXMLS1MAPPINGS, updateFields[0], updateFields[1], updateFields[2], updateFields[3]);
+                break;
+            case 5:
+                X.RUNSQL(updateSql, params.CCCXMLS1MAPPINGS, updateFields[0], updateFields[1], updateFields[2], updateFields[3], updateFields[4]);
+                break;
+            case 6:
+                X.RUNSQL(updateSql, params.CCCXMLS1MAPPINGS, updateFields[0], updateFields[1], updateFields[2], updateFields[3], updateFields[4], updateFields[5]);
+                break;
+            case 7:
+                X.RUNSQL(updateSql, params.CCCXMLS1MAPPINGS, updateFields[0], updateFields[1], updateFields[2], updateFields[3], updateFields[4], updateFields[5], updateFields[6]);
+                break;
+            case 8:
+                X.RUNSQL(updateSql, params.CCCXMLS1MAPPINGS, updateFields[0], updateFields[1], updateFields[2], updateFields[3], updateFields[4], updateFields[5], updateFields[6], updateFields[7]);
+                break;
+        }
+
+        return {
+            success: true,
+            message: "Field mapping updated successfully"
+        };
+    } catch (e) {
+        return {
+            success: false,
+            message: "Error updating field mapping: " + e.message
+        };
+    }
+}
+
+/**
+ * Deletes a field mapping
+ * @param {Object} params Object with id property
+ * @returns {Object} Result with success/error information
+ */
+function deleteFieldMapping(params) {
+    try {
+        var id = params.id;
+
+        // Validate ID
+        if (!id) {
+            return { success: false, message: "Field mapping ID is required" };
+        }
+
+        // Check if field mapping exists
+        var query = "SELECT COUNT(*) as cnt FROM CCCXMLS1MAPPINGS WHERE CCCXMLS1MAPPINGS = :1";
+        var count = X.SQL(query, id);
+
+        if (parseInt(count) === 0) {
+            return {
+                success: false,
+                message: "Field mapping with ID " + id + " not found"
+            };
+        }
+
+        // Delete the field mapping
+        var sqlDelete = "DELETE FROM CCCXMLS1MAPPINGS WHERE CCCXMLS1MAPPINGS = :1";
+        X.RUNSQL(sqlDelete, id);
+
+        return {
+            success: true,
+            message: "Field mapping deleted successfully"
+        };
+    } catch (e) {
+        return {
+            success: false,
+            message: "Error deleting field mapping: " + e.message
         };
     }
 }
