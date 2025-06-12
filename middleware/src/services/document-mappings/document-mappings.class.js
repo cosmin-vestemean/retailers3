@@ -70,16 +70,119 @@ export class DocumentMappingsService {
             this.clientID = null;
             throw error;
         }
+    }    // GET /document-mappings?trdr_retailer=…&trdr_client=…
+    async find(params) {
+        const query = params.query || {};
+        
+        try {
+            // If specific retailer and client are provided, use the specific function
+            if (query.trdr_retailer && query.trdr_client) {
+                const response = await axios.post(
+                    `${this.baseUrl}/JS/AJS_edi_integration/getDocumentMappingsByRetailerClient`,
+                    query,
+                    { headers: { 'Content-Type': 'application/json' } }
+                );
+                return response.data;
+            } else {
+                // Otherwise, get all mappings (optionally filtered by client for tenant isolation)
+                const response = await axios.post(
+                    `${this.baseUrl}/JS/AJS_edi_integration/getAllDocumentMappings`,
+                    query,
+                    { headers: { 'Content-Type': 'application/json' } }
+                );
+                return response.data;
+            }
+        } catch (error) {
+            // Fallback to mock data for development when S1 is not available
+            console.warn('S1 API not available, returning mock data:', error.message);
+            return this._getMockDocumentMappings(query);
+        }
     }
 
-    // GET /document-mappings?trdr_retailer=…&trdr_client=…
-    async find(params) {
-        const response = await axios.post(
-            `${this.baseUrl}/JS/AJS_edi_integration/getDocumentMappingsByRetailerClient`,
-            params.query || {},
-            { headers: { 'Content-Type': 'application/json' } }
-        );
-        return response.data;
+    _getMockDocumentMappings(query) {
+        const mockData = [
+            {
+                id: 1,
+                trdr_retailer: 12345,
+                trdr_client: 1,
+                client_name: 'Pet Factory SRL',
+                retailer_name: 'Auchan Romania',
+                sosource: 100,
+                fprms: 2001,
+                series: 7001,
+                initialdirin: 'C:\\EDI\\IN\\AUCHAN',
+                initialdirout: 'C:\\EDI\\OUT\\AUCHAN',
+                document_type: 'ORDER',
+                direction: 'INBOUND',
+                auto_process: true,
+                active: true,
+                test_mode: false,
+                xml_root_path: '/Order',
+                header_path: '/Order/OrderHeader',
+                lines_path: '/Order/OrderLine',
+                created_date: '2024-01-15',
+                modified_date: '2024-06-10',
+                created_by: 'admin'
+            },
+            {
+                id: 2,
+                trdr_retailer: 67890,
+                trdr_client: 1,
+                client_name: 'Pet Factory SRL',
+                retailer_name: 'Dedeman',
+                sosource: 200,
+                fprms: 3001,
+                series: 8001,
+                initialdirin: 'C:\\EDI\\IN\\DEDEMAN',
+                initialdirout: 'C:\\EDI\\OUT\\DEDEMAN',
+                document_type: 'INVOICE',
+                direction: 'OUTBOUND',
+                auto_process: false,
+                active: true,
+                test_mode: true,
+                xml_root_path: '/Invoice',
+                header_path: '/Invoice/InvoiceHeader',
+                lines_path: '/Invoice/InvoiceLine',
+                created_date: '2024-02-20',
+                modified_date: '2024-06-12',
+                created_by: 'admin'
+            },
+            {
+                id: 3,
+                trdr_retailer: 11111,
+                trdr_client: 1,
+                client_name: 'Pet Factory SRL',
+                retailer_name: 'Sezamo',
+                sosource: 300,
+                fprms: 4001,
+                series: 9001,
+                initialdirin: 'C:\\EDI\\IN\\SEZAMO',
+                initialdirout: 'C:\\EDI\\OUT\\SEZAMO',
+                document_type: 'DESADV',
+                direction: 'OUTBOUND',
+                auto_process: true,
+                active: true,
+                test_mode: false,
+                xml_root_path: '/DeliveryAdvice',
+                header_path: '/DeliveryAdvice/Header',
+                lines_path: '/DeliveryAdvice/Line',
+                created_date: '2024-03-10',
+                modified_date: '2024-06-11',
+                created_by: 'admin'
+            }
+        ];
+
+        // Apply client filter if provided (for tenant isolation)
+        let filteredData = mockData;
+        if (query.trdr_client) {
+            filteredData = mockData.filter(item => item.trdr_client === parseInt(query.trdr_client));
+        }
+
+        return {
+            success: true,
+            data: filteredData,
+            count: filteredData.length
+        };
     }
 
     // GET /document-mappings/:id

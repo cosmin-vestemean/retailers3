@@ -734,6 +734,85 @@ function getConnType(params) {
 }
 
 /**
+ * Gets all document-to-S1 mappings (optionally filtered by client for multi-tenant support)
+ * @param {Object} params Optional object with trdr_client property for tenant filtering
+ * @returns {Object} List of all document mappings with success/error information
+ */
+function getAllDocumentMappings(params) {
+    try {
+        var companyId = X.SYS.COMPANY;
+        var query;
+        var ds;
+
+        // If client ID is provided, filter by client (for tenant isolation)
+        if (params && params.trdr_client) {
+            query = "SELECT m.CCCDOCUMENTES1MAPPINGS as id, m.TRDR_RETAILER, m.TRDR_CLIENT, " +
+                "m.SOSOURCE, m.FPRMS, m.SERIES, m.INITIALDIRIN, m.INITIALDIROUT, " +
+                "m.DOCUMENT_TYPE, m.DIRECTION, m.AUTO_PROCESS, m.ACTIVE, m.TEST_MODE, " +
+                "m.XML_ROOT_PATH, m.HEADER_PATH, m.LINES_PATH, " +
+                "m.CREATED_DATE, m.MODIFIED_DATE, m.CREATED_BY, " +
+                "r.NAME as retailerName, c.NAME as clientName " +
+                "FROM CCCDOCUMENTES1MAPPINGS m " +
+                "LEFT JOIN TRDR r ON r.TRDR = m.TRDR_RETAILER AND r.COMPANY = " + companyId + " " +
+                "LEFT JOIN CCCRETAILERSCLIENTS c ON c.TRDR_CLIENT = m.TRDR_CLIENT " +
+                "WHERE m.TRDR_CLIENT = :1 " +
+                "ORDER BY c.NAME, r.NAME, m.DOCUMENT_TYPE, m.DIRECTION";
+
+            ds = X.GETSQLDATASET(query, params.trdr_client);
+        } else {
+            // Get all mappings (admin view)
+            query = "SELECT m.CCCDOCUMENTES1MAPPINGS as id, m.TRDR_RETAILER, m.TRDR_CLIENT, " +
+                "m.SOSOURCE, m.FPRMS, m.SERIES, m.INITIALDIRIN, m.INITIALDIROUT, " +
+                "m.DOCUMENT_TYPE, m.DIRECTION, m.AUTO_PROCESS, m.ACTIVE, m.TEST_MODE, " +
+                "m.XML_ROOT_PATH, m.HEADER_PATH, m.LINES_PATH, " +
+                "m.CREATED_DATE, m.MODIFIED_DATE, m.CREATED_BY, " +
+                "r.NAME as retailerName, c.NAME as clientName " +
+                "FROM CCCDOCUMENTES1MAPPINGS m " +
+                "LEFT JOIN TRDR r ON r.TRDR = m.TRDR_RETAILER AND r.COMPANY = " + companyId + " " +
+                "LEFT JOIN CCCRETAILERSCLIENTS c ON c.TRDR_CLIENT = m.TRDR_CLIENT " +
+                "ORDER BY c.NAME, r.NAME, m.DOCUMENT_TYPE, m.DIRECTION";
+
+            ds = X.GETSQLDATASET(query, null);
+        }
+
+        // Convert dataset to result array
+        var result = [];
+        ds.FIRST;
+        while (!ds.EOF) {
+            result.push({
+                id: ds.id,
+                trdr_retailer: ds.TRDR_RETAILER,
+                trdr_client: ds.TRDR_CLIENT,
+                client_name: ds.clientName,
+                retailer_name: ds.retailerName,
+                sosource: ds.SOSOURCE,
+                fprms: ds.FPRMS,
+                series: ds.SERIES,
+                initialdirin: ds.INITIALDIRIN,
+                initialdirout: ds.INITIALDIROUT,
+                document_type: ds.DOCUMENT_TYPE,
+                direction: ds.DIRECTION,
+                auto_process: ds.AUTO_PROCESS === 1,
+                active: ds.ACTIVE === 1,
+                test_mode: ds.TEST_MODE === 1,
+                xml_root_path: ds.XML_ROOT_PATH,
+                header_path: ds.HEADER_PATH,
+                lines_path: ds.LINES_PATH,
+                created_date: ds.CREATED_DATE,
+                modified_date: ds.MODIFIED_DATE,
+                created_by: ds.CREATED_BY
+            });
+            ds.NEXT;
+        }
+
+        return { success: true, data: result, count: result.length };
+
+    } catch (e) {
+        return { success: false, message: "Error retrieving document mappings: " + e.message };
+    }
+}
+
+/**
  * Gets document-to-S1 mappings by retailer and client combination
  * @param {Object} params Object with trdr_retailer and trdr_client properties
  * @returns {Object} List of document mappings with success/error information
@@ -1812,7 +1891,7 @@ function updateFieldMapping(params) {
 
         updateSql += "MODIFIED_DATE = GETDATE()";
 
-        // If no fields to update besides modified date, return success
+        // If no fields to update, return success
         if (updateFields.length === 0) {
             // Simple update just for the modified date
             X.RUNSQL("UPDATE CCCXMLS1MAPPINGS SET MODIFIED_DATE = GETDATE() WHERE CCCXMLS1MAPPINGS = :1", params.CCCXMLS1MAPPINGS);

@@ -8,31 +8,28 @@
     "lint": "vue-cli-service lint"
   },
   "dependencies": {
+    "@feathersjs/feathers": "^5.0.34",
+    "@feathersjs/rest-client": "^5.0.34",
+    "@mdi/font": "^7.4.47",
+    "axios": "^1.9.0",
     "core-js": "^3.8.3",
-    "vue": "^3.2.13"
+    "pinia": "^3.0.3",
+    "vue": "^3.2.13",
+    "vue-router": "^4.5.1",
+    "vuetify": "^3.8.0-beta.0"
   },
   "devDependencies": {
     "@babel/core": "^7.12.16",
     "@babel/eslint-parser": "^7.12.16",
+    "@vitest/ui": "^3.2.3",
     "@vue/cli-plugin-babel": "~5.0.0",
     "@vue/cli-plugin-eslint": "~5.0.0",
     "@vue/cli-service": "~5.0.0",
+    "@vue/test-utils": "^2.4.6",
     "eslint": "^7.32.0",
-    "eslint-plugin-vue": "^8.0.3"
-  },
-  "eslintConfig": {
-    "root": true,
-    "env": {
-      "node": true
-    },
-    "extends": [
-      "plugin:vue/vue3-essential",
-      "eslint:recommended"
-    ],
-    "parserOptions": {
-      "parser": "@babel/eslint-parser"
-    },
-    "rules": {}
+    "eslint-plugin-vue": "^8.0.3",
+    "jsdom": "^26.1.0",
+    "vitest": "^3.2.3"
   },
   "browserslist": [
     "> 1%",
