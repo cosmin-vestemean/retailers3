@@ -536,7 +536,7 @@ function storeDocumentWithRouting(params) {
 
         var processInLegacy = true;
         if (!routingDs.EOF) {
-            processInLegacy = routingDs.PROCESS_IN_LEGACY === 1;
+            processInLegacy = routingDs.PROCESS_IN_LEGACY? true : false;
         }
 
         // Update document with routing decision
@@ -792,9 +792,10 @@ function getAllDocumentMappings(params) {
                 initialdirout: ds.INITIALDIROUT,
                 document_type: ds.DOCUMENT_TYPE,
                 direction: ds.DIRECTION,
-                auto_process: ds.AUTO_PROCESS === 1,
-                active: ds.ACTIVE === 1,
-                test_mode: ds.TEST_MODE === 1,
+                auto_process: ds.AUTO_PROCESS? true : false,
+                // Convert boolean fields to true/false
+                active: ds.ACTIVE? true : false,
+                test_mode: ds.TEST_MODE? true : false,
                 xml_root_path: ds.XML_ROOT_PATH,
                 header_path: ds.HEADER_PATH,
                 lines_path: ds.LINES_PATH,
@@ -940,9 +941,7 @@ function getDocumentMapping(params) {
                     id: params.id
                 }
             };
-        }
-
-        // Create mapping object
+        }        // Create mapping object
         var mapping = {
             id: ds.id,
             trdr_retailer: ds.TRDR_RETAILER,
@@ -954,9 +953,9 @@ function getDocumentMapping(params) {
             initialdirout: ds.INITIALDIROUT,
             document_type: ds.DOCUMENT_TYPE,
             direction: ds.DIRECTION,
-            auto_process: ds.AUTO_PROCESS,
-            active: ds.ACTIVE,
-            test_mode: ds.TEST_MODE,
+            auto_process: ds.AUTO_PROCESS? true : false,
+            active: ds.ACTIVE? true : false,
+            test_mode: ds.TEST_MODE? true : false,
             xml_root_path: ds.XML_ROOT_PATH,
             header_path: ds.HEADER_PATH,
             lines_path: ds.LINES_PATH,
@@ -1615,8 +1614,8 @@ function getFieldMappings(params) {
                 s1_field: ds.s1_field,
                 transformation_rule: ds.TRANSFORMATION,
                 default_value: ds.DEFAULT_VALUE,
-                is_required: ds.is_required,
-                active: ds.active,
+                is_required: ds.is_required? true : false,
+                active: ds.active? true : false,
                 created_date: ds.CREATED_DATE,
                 modified_date: ds.MODIFIED_DATE,
                 created_by: ds.CREATED_BY,

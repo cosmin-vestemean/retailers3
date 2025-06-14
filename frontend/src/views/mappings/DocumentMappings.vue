@@ -46,6 +46,14 @@
               clearable
               @update:model-value="fetchDocumentMappings"
             />
+          </v-col>          <v-col cols="12" md="3">
+            <v-select
+              v-model="filters.retailerName"
+              :items="uniqueRetailers"
+              label="Retailer"
+              clearable
+              @update:model-value="fetchDocumentMappings"
+            />
           </v-col>
           <v-col cols="12" md="3">
             <v-select
@@ -78,10 +86,13 @@
       :items="filteredMappings"
       :loading="loading"
       class="elevation-1"
-    >
-      <template #item.client_name="{ item }">
+    >      <template #item.client_name="{ item }">
         <v-chip color="primary" size="small" variant="tonal">
           {{ item.client_name || 'Unknown' }}
+        </v-chip>
+      </template>      <template #item.retailer_name="{ item }">
+        <v-chip color="secondary" size="small" variant="tonal">
+          {{ item.retailer_name || 'Unknown' }}
         </v-chip>
       </template>
 
@@ -387,9 +398,9 @@ export default {
     const deleting = ref(false)
     const itemsPerPage = ref(10)
     const form = ref(null)
-    
-    const filters = ref({
+      const filters = ref({
       selectedClient: null,
+      retailerName: null,
       documentType: null,
       direction: null,
       active: null
@@ -438,9 +449,14 @@ export default {
       show: false,
       message: '',
       color: 'success'    })
-    
-    // Computed
+      // Computed
     const clients = computed(() => appStore.clients)
+      const uniqueRetailers = computed(() => {
+      const retailers = documentMappings.value
+        .filter(m => m.retailer_name)
+        .map(m => m.retailer_name)
+      return [...new Set(retailers)].sort()
+    })
     
     const filteredMappings = computed(() => {
       // Ensure we always have an array to work with
@@ -451,6 +467,9 @@ export default {
       
       if (filters.value.selectedClient) {
         filtered = filtered.filter(m => m.trdr_client === filters.value.selectedClient)
+      }
+        if (filters.value.retailerName) {
+        filtered = filtered.filter(m => m.retailer_name === filters.value.retailerName)
       }
       
       if (filters.value.documentType) {
@@ -476,10 +495,10 @@ export default {
       { text: 'Active', value: true },
       { text: 'Inactive', value: false }
     ]
-    
-    const headers = [
+      const headers = [
       { title: 'Client', key: 'client_name', sortable: true },
       { title: 'Retailer ID', key: 'trdr_retailer', sortable: true },
+      { title: 'Retailer Name', key: 'retailer_name', sortable: true },
       { title: 'Document Type', key: 'document_type', sortable: true },
       { title: 'Direction', key: 'direction', sortable: true },
       { title: 'SO Source', key: 'sosource', sortable: true },
@@ -503,10 +522,14 @@ export default {
         // Ensure we always have an array, even if the API returns something else
         const data = response.data || response
         console.log('Extracted data:', data)
-        
-        if (Array.isArray(data)) {
-          documentMappings.value = data
-          console.log('Set document mappings to:', data.length, 'items')
+          if (Array.isArray(data)) {
+          // Map backend field names to frontend expectations
+          documentMappings.value = data.map(item => ({
+            ...item,
+            client_name: item.clientName || item.client_name || 'Unknown',
+            retailer_name: item.retailerName || item.retailer_name || 'Unknown'
+          }))
+          console.log('Set document mappings to:', documentMappings.value.length, 'items')
         } else {
           console.warn('API returned non-array data, using fallback mock data')
           documentMappings.value = [
@@ -731,9 +754,9 @@ export default {
       filters,
       editedItem,
       itemToDelete,
-      isEditing,
-      snackbar,
+      isEditing,      snackbar,
       clients,
+      uniqueRetailers,
       filteredMappings,
       documentTypes,
       directions,
