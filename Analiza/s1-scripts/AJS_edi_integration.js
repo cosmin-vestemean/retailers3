@@ -1585,15 +1585,13 @@ function getFieldMappings(params) {
                 success: false,
                 message: "Document mapping ID is required"
             };
-        }
-
-        // Query field mappings by document mapping ID
+        }        // Query field mappings by document mapping ID
         var query = "SELECT f.CCCXMLS1MAPPINGS as id, f.CCCDOCUMENTES1MAPPINGS, " +
             "COALESCE(f.XML_PATH, f.XMLNODE) as xml_path, " +
             "COALESCE(f.S1_TABLE, f.S1TABLE1) as s1_table, " +
             "COALESCE(f.S1_FIELD, f.S1FIELD1) as s1_field, " +
-            "f.TRANSFORMATION_RULE, f.VALIDATION_RULE, f.DEFAULT_VALUE, " +
-            "COALESCE(f.IS_REQUIRED, f.MANDATORY, 0) as is_required, " +
+            "f.TRANSFORMATION, f.DEFAULT_VALUE, " +
+            "COALESCE(f.REQUIRED, f.MANDATORY, 0) as is_required, " +
             "COALESCE(f.ACTIVE, 1) as active, " +
             "f.CREATED_DATE, f.MODIFIED_DATE, f.CREATED_BY, " +
             "d.DOCUMENT_TYPE, d.DIRECTION, r.NAME as retailerName, c.NAME as clientName " +
@@ -1609,15 +1607,13 @@ function getFieldMappings(params) {
         // Convert dataset to result array
         var result = [];
         ds.FIRST;
-        while (!ds.EOF) {
-            result.push({
+        while (!ds.EOF) {            result.push({
                 id: ds.id,
                 document_mapping_id: ds.CCCDOCUMENTES1MAPPINGS,
                 xml_path: ds.xml_path,
                 s1_table: ds.s1_table,
                 s1_field: ds.s1_field,
-                transformation_rule: ds.TRANSFORMATION_RULE,
-                validation_rule: ds.VALIDATION_RULE,
+                transformation_rule: ds.TRANSFORMATION,
                 default_value: ds.DEFAULT_VALUE,
                 is_required: ds.is_required,
                 active: ds.active,
@@ -1661,18 +1657,16 @@ function getFieldMapping(params) {
                 success: false,
                 message: "Field mapping ID is required"
             };
-        }
-
-        // Query field mapping by ID
+        }        // Query field mapping by ID
         var query = "SELECT f.CCCXMLS1MAPPINGS as id, f.CCCDOCUMENTES1MAPPINGS, " +
             "COALESCE(f.XML_PATH, f.XMLNODE) as xml_path, " +
             "COALESCE(f.S1_TABLE, f.S1TABLE1) as s1_table, " +
             "COALESCE(f.S1_FIELD, f.S1FIELD1) as s1_field, " +
-            "f.TRANSFORMATION_RULE, f.VALIDATION_RULE, f.DEFAULT_VALUE, " +
-            "COALESCE(f.IS_REQUIRED, f.MANDATORY, 0) as is_required, " +
+            "f.TRANSFORMATION, f.DEFAULT_VALUE, " +
+            "COALESCE(f.REQUIRED, f.MANDATORY, 0) as is_required, " +
             "COALESCE(f.ACTIVE, 1) as active, " +
             "f.CREATED_DATE, f.MODIFIED_DATE, f.CREATED_BY, " +
-            "d.DOCUMENT_TYPE, d.DIRECTION, r.NAME as retailerName, c.NAME as clientName " +
+            "d.DOCUMENT_TYPE, d.DIRECTION, r.NAME as retailerName, c.NAME as clientName "+
             "FROM CCCXMLS1MAPPINGS f " +
             "INNER JOIN CCCDOCUMENTES1MAPPINGS d ON d.CCCDOCUMENTES1MAPPINGS = f.CCCDOCUMENTES1MAPPINGS " +
             "LEFT JOIN TRDR r ON r.TRDR = d.TRDR_RETAILER AND r.COMPANY = " + companyId + " " +
@@ -1687,17 +1681,14 @@ function getFieldMapping(params) {
                 success: false,
                 message: "Field mapping with ID " + id + " not found"
             };
-        }
-
-        // Create field mapping object
+        }        // Create field mapping object
         var mapping = {
             id: ds.id,
             document_mapping_id: ds.CCCDOCUMENTES1MAPPINGS,
             xml_path: ds.xml_path,
             s1_table: ds.s1_table,
             s1_field: ds.s1_field,
-            transformation_rule: ds.TRANSFORMATION_RULE,
-            validation_rule: ds.VALIDATION_RULE,
+            transformation_rule: ds.TRANSFORMATION,
             default_value: ds.DEFAULT_VALUE,
             is_required: ds.is_required,
             active: ds.active,
@@ -1769,30 +1760,24 @@ function createFieldMapping(params) {
                 message: "Field mapping already exists for XML path " + params.XML_PATH +
                     " in document mapping " + params.CCCDOCUMENTES1MAPPINGS
             };
-        }
-
-        // Prepare insert statement - using both old and new columns for compatibility
+        }        // Prepare insert statement - using both old and new columns for compatibility
         var sqlInsert = "INSERT INTO CCCXMLS1MAPPINGS " +
             "(CCCDOCUMENTES1MAPPINGS, XMLNODE, XML_PATH, S1TABLE1, S1_TABLE, S1FIELD1, S1_FIELD, " +
-            "TRANSFORMATION_RULE, VALIDATION_RULE, DEFAULT_VALUE, MANDATORY, IS_REQUIRED, " +
+            "TRANSFORMATION, DEFAULT_VALUE, MANDATORY, REQUIRED, " +
             "ACTIVE, CREATED_DATE, CREATED_BY) " +
-            "VALUES (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, GETDATE(), :14); " +
-            "SELECT SCOPE_IDENTITY() AS new_id;";
-
-        // Execute insert
+            "VALUES (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, GETDATE(), :13); " +
+            "SELECT SCOPE_IDENTITY() AS new_id;";// Execute insert
         var newId = X.SQL(sqlInsert,
             params.CCCDOCUMENTES1MAPPINGS,
             params.XML_PATH, // XMLNODE (old column)
             params.XML_PATH, // XML_PATH (new column)
             params.S1_TABLE, // S1TABLE1 (old column)
-            params.S1_TABLE, // S1_TABLE (new column)
-            params.S1_FIELD, // S1FIELD1 (old column)
+            params.S1_TABLE, // S1_TABLE (new column)            params.S1_FIELD, // S1FIELD1 (old column)
             params.S1_FIELD, // S1_FIELD (new column)
-            params.TRANSFORMATION_RULE || null,
-            params.VALIDATION_RULE || null,
+            params.TRANSFORMATION || null,
             params.DEFAULT_VALUE || null,
             params.IS_REQUIRED ? 1 : 0, // MANDATORY (old column)
-            params.IS_REQUIRED ? 1 : 0, // IS_REQUIRED (new column)
+            params.IS_REQUIRED ? 1 : 0, // REQUIRED (new column)
             params.ACTIVE !== undefined ? (params.ACTIVE ? 1 : 0) : 1,
             params.CREATED_BY || 'API'
         );
@@ -1854,30 +1839,20 @@ function updateFieldMapping(params) {
         if (params.S1_FIELD !== undefined) {
             updateSql += "S1_FIELD = :" + (updateFields.length + 2) + ", S1FIELD1 = :" + (updateFields.length + 2) + ", ";
             updateFields.push(params.S1_FIELD);
-        }
-
-        // TRANSFORMATION_RULE
-        if (params.TRANSFORMATION_RULE !== undefined) {
-            updateSql += "TRANSFORMATION_RULE = :" + (updateFields.length + 2) + ", ";
-            updateFields.push(params.TRANSFORMATION_RULE);
-        }
-
-        // VALIDATION_RULE
-        if (params.VALIDATION_RULE !== undefined) {
-            updateSql += "VALIDATION_RULE = :" + (updateFields.length + 2) + ", ";
-            updateFields.push(params.VALIDATION_RULE);
+        }        // TRANSFORMATION
+        if (params.TRANSFORMATION !== undefined) {
+            updateSql += "TRANSFORMATION = :" + (updateFields.length + 2) + ", ";
+            updateFields.push(params.TRANSFORMATION);
         }
 
         // DEFAULT_VALUE
         if (params.DEFAULT_VALUE !== undefined) {
             updateSql += "DEFAULT_VALUE = :" + (updateFields.length + 2) + ", ";
             updateFields.push(params.DEFAULT_VALUE);
-        }
-
-        // IS_REQUIRED
+        }        // IS_REQUIRED (maps to REQUIRED column in DB)
         if (params.IS_REQUIRED !== undefined) {
             var requiredValue = params.IS_REQUIRED ? 1 : 0;
-            updateSql += "IS_REQUIRED = :" + (updateFields.length + 2) + ", MANDATORY = :" + (updateFields.length + 2) + ", ";
+            updateSql += "REQUIRED = :" + (updateFields.length + 2) + ", MANDATORY = :" + (updateFields.length + 2) + ", ";
             updateFields.push(requiredValue);
         }
 

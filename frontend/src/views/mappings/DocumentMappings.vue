@@ -437,14 +437,17 @@ export default {
     const snackbar = ref({
       show: false,
       message: '',
-      color: 'success'
-    })
+      color: 'success'    })
     
     // Computed
     const clients = computed(() => appStore.clients)
-      const filteredMappings = computed(() => {
+    
+    const filteredMappings = computed(() => {
       // Ensure we always have an array to work with
-      let filtered = Array.isArray(documentMappings.value) ? documentMappings.value : []
+      const mappings = Array.isArray(documentMappings.value) ? documentMappings.value : []
+      console.log('filteredMappings computed - input mappings:', mappings.length)
+      
+      let filtered = [...mappings]
       
       if (filters.value.selectedClient) {
         filtered = filtered.filter(m => m.trdr_client === filters.value.selectedClient)
@@ -462,6 +465,7 @@ export default {
         filtered = filtered.filter(m => m.active === filters.value.active)
       }
       
+      console.log('filteredMappings computed - output filtered:', filtered.length)
       return filtered
     })
     
@@ -492,13 +496,64 @@ export default {
     const fetchDocumentMappings = async () => {
       loading.value = true
       try {
+        console.log('Fetching document mappings...')
         const response = await api.service('document-mappings').find()
+        console.log('API response:', response)
+        
         // Ensure we always have an array, even if the API returns something else
         const data = response.data || response
-        documentMappings.value = Array.isArray(data) ? data : []
+        console.log('Extracted data:', data)
+        
+        if (Array.isArray(data)) {
+          documentMappings.value = data
+          console.log('Set document mappings to:', data.length, 'items')
+        } else {
+          console.warn('API returned non-array data, using fallback mock data')
+          documentMappings.value = [
+            {
+              id: 1,
+              trdr_retailer: 12345,
+              trdr_client: 1,
+              client_name: 'Pet Factory SRL',
+              sosource: 100,
+              fprms: 2001,
+              series: 7001,
+              initialdirin: 'C:\\EDI\\IN',
+              initialdirout: 'C:\\EDI\\OUT',
+              document_type: 'ORDER',
+              direction: 'INBOUND',
+              auto_process: true,
+              active: true,
+              test_mode: false,
+              xml_root_path: '/Order',
+              header_path: '/Order/OrderHeader',
+              lines_path: '/Order/OrderLine'
+            },
+            {
+              id: 2,
+              trdr_retailer: 67890,
+              trdr_client: 1,
+              client_name: 'Pet Factory SRL',
+              sosource: 200,
+              fprms: 3001,
+              series: 8001,
+              initialdirin: 'C:\\EDI\\IN',
+              initialdirout: 'C:\\EDI\\OUT',
+              document_type: 'INVOICE',
+              direction: 'OUTBOUND',
+              auto_process: false,
+              active: true,
+              test_mode: true,
+              xml_root_path: '/Invoice',
+              header_path: '/Invoice/InvoiceHeader',
+              lines_path: '/Invoice/InvoiceLine'
+            }
+          ]
+          showSnackbar('Using mock data - API returned invalid format', 'warning')
+        }
       } catch (error) {
         // Fallback to mock data for development
-        console.warn('API call failed, using mock data:', error)
+        console.error('API call failed:', error)
         documentMappings.value = [
           {
             id: 1,

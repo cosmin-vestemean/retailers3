@@ -61,9 +61,8 @@ const routes = [
         path: 'documents',
         name: 'DocumentMappings',
         component: DocumentMappings
-      },
-      {
-        path: 'fields/:documentId?',
+      },      {
+        path: 'fields/:id',
         name: 'FieldMappings',
         component: FieldMappings,
         props: true
