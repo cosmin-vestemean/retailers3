@@ -649,15 +649,59 @@ function getRetailersClient(params) {
  */
 function getEdiProviders(params) {
     try {
-        var query = "SELECT CCCEDIPROVIDER as id, NAME, CONNTYPE FROM CCCEDIPROVIDER ORDER BY NAME";
+        var query = "SELECT " +
+            "a.CCCSFTP as id, " +
+            "a.TRDR_RETAILER, " +
+            "a.TRDR_CLIENT, " +
+            "a.URL, " +
+            "a.PORT, " +
+            "a.USERNAME, " +
+            "a.PASSPHRASE, " +
+            "a.INITIALDIRIN, " +
+            "a.INITIALDIROUT, " +
+            "a.FINGERPRINT, " +
+            "a.PRIVATEKEY, " +
+            "b.CCCEDIPROVIDER as provider_id, " +
+            "b.NAME as provider_name, " +
+            "b.CONNTYPE as conntype_id, " +
+            "c.NAME as conntype_name, " +
+            "r.NAME as retailer_name, " +
+            "r.CODE as retailer_code, " +
+            "cl.WSURL as client_ws_url, " +
+            "cl.ACTIVE as client_active " +
+            "FROM CCCSFTP a " +
+            "INNER JOIN CCCEDIPROVIDER b ON a.EDIPROVIDER = b.CCCEDIPROVIDER " +
+            "INNER JOIN CCCCONNTYPE c ON c.CCCCONNTYPE = b.CONNTYPE " +
+            "LEFT JOIN TRDR r ON r.COMPANY = " + X.SYS.COMPANY + " AND r.TRDR = a.TRDR_RETAILER " +
+            "LEFT JOIN CCCRETAILERSCLIENTS cl ON cl.TRDR_CLIENT = a.TRDR_CLIENT " +
+            "ORDER BY b.NAME, r.NAME";
+        
         var ds = X.GETSQLDATASET(query);
         var result = [];
         ds.FIRST;
         while (!ds.EOF) {
             result.push({
                 id: ds.id,
-                name: ds.NAME,
-                conntype: ds.CONNTYPE
+                trdr_retailer: ds.TRDR_RETAILER,
+                trdr_client: ds.TRDR_CLIENT,
+                retailer_name: ds.retailer_name || 'Unknown',
+                retailer_code: ds.retailer_code || '',
+                provider_id: ds.provider_id,
+                provider_name: ds.provider_name,
+                conntype_id: ds.conntype_id,
+                conntype_name: ds.conntype_name,
+                connection_details: {
+                    url: ds.URL,
+                    port: ds.PORT,
+                    username: ds.USERNAME,
+                    passphrase: ds.PASSPHRASE,
+                    initial_dir_in: ds.INITIALDIRIN,
+                    initial_dir_out: ds.INITIALDIROUT,
+                    fingerprint: ds.FINGERPRINT,
+                    private_key: ds.PRIVATEKEY ? '[CONFIGURED]' : null
+                },
+                client_active: ds.client_active ? true : false,
+                client_ws_url: ds.client_ws_url
             });
             ds.NEXT;
         }
@@ -668,9 +712,9 @@ function getEdiProviders(params) {
 }
 
 /**
- * Gets a single EDI provider by ID
+ * Gets a single EDI provider by ID (CCCSFTP.CCCSFTP)
  * @param {Object} params Object with id property
- * @returns {Object} Single provider or error
+ * @returns {Object} Single provider with full connection details or error
  */
 function getEdiProvider(params) {
     try {
@@ -678,12 +722,75 @@ function getEdiProvider(params) {
         if (!id) {
             return { success: false, message: "Provider ID is required" };
         }
-        var query = "SELECT CCCEDIPROVIDER as id, NAME, CONNTYPE FROM CCCEDIPROVIDER WHERE CCCEDIPROVIDER = :1";
+        
+        var query = "SELECT " +
+            "a.CCCSFTP as id, " +
+            "a.TRDR_RETAILER, " +
+            "a.TRDR_CLIENT, " +
+            "a.URL, " +
+            "a.PORT, " +
+            "a.USERNAME, " +
+            "a.PASSPHRASE, " +
+            "a.INITIALDIRIN, " +
+            "a.INITIALDIROUT, " +
+            "a.FINGERPRINT, " +
+            "a.PRIVATEKEY, " +
+            "b.CCCEDIPROVIDER as provider_id, " +
+            "b.NAME as provider_name, " +
+            "b.CONNTYPE as conntype_id, " +
+            "c.NAME as conntype_name, " +
+            "r.NAME as retailer_name, " +
+            "r.CODE as retailer_code, " +
+            "r.AFM as retailer_tax_id, " +
+            "cl.WSURL as client_ws_url, " +
+            "cl.WSUSER as client_ws_user, " +
+            "cl.COMPANY as client_company, " +
+            "cl.BRANCH as client_branch, " +
+            "cl.ACTIVE as client_active " +
+            "FROM CCCSFTP a " +
+            "INNER JOIN CCCEDIPROVIDER b ON a.EDIPROVIDER = b.CCCEDIPROVIDER " +
+            "INNER JOIN CCCCONNTYPE c ON c.CCCCONNTYPE = b.CONNTYPE " +
+            "LEFT JOIN TRDR r ON r.COMPANY = " + X.SYS.COMPANY + " AND r.TRDR = a.TRDR_RETAILER " +
+            "LEFT JOIN CCCRETAILERSCLIENTS cl ON cl.TRDR_CLIENT = a.TRDR_CLIENT " +
+            "WHERE a.CCCSFTP = :1";
+            
         var ds = X.GETSQLDATASET(query, id);
         if (ds.EOF) {
             return { success: false, message: "Provider not found: " + id };
         }
-        var provider = { id: ds.id, name: ds.NAME, conntype: ds.CONNTYPE };
+        
+        var provider = {
+            id: ds.id,
+            trdr_retailer: ds.TRDR_RETAILER,
+            trdr_client: ds.TRDR_CLIENT,
+            retailer: {
+                name: ds.retailer_name || 'Unknown',
+                code: ds.retailer_code || '',
+                tax_id: ds.retailer_tax_id || ''
+            },
+            provider_id: ds.provider_id,
+            provider_name: ds.provider_name,
+            conntype_id: ds.conntype_id,
+            conntype_name: ds.conntype_name,
+            connection_details: {
+                url: ds.URL,
+                port: ds.PORT,
+                username: ds.USERNAME,
+                passphrase: ds.PASSPHRASE, // Be careful with sensitive data
+                initial_dir_in: ds.INITIALDIRIN,
+                initial_dir_out: ds.INITIALDIROUT,
+                fingerprint: ds.FINGERPRINT,
+                private_key: ds.PRIVATEKEY ? '[CONFIGURED]' : null // Don't expose actual key
+            },
+            client: {
+                ws_url: ds.client_ws_url,
+                ws_user: ds.client_ws_user,
+                company: ds.client_company,
+                branch: ds.client_branch,
+                active: ds.client_active ? true : false
+            }
+        };
+        
         return { success: true, data: provider };
     } catch (e) {
         return { success: false, message: "Error retrieving EDI provider: " + e.message };
@@ -698,7 +805,7 @@ function getEdiProvider(params) {
 function getConnTypes(params) {
     try {
         var query = "SELECT CCCCONNTYPE as id, NAME FROM CCCCONNTYPE ORDER BY NAME";
-        var ds = X.GETSQLDATASET(query);
+        var ds
         var result = [];
         ds.FIRST;
         while (!ds.EOF) {
@@ -725,11 +832,165 @@ function getConnType(params) {
         var query = "SELECT CCCCONNTYPE as id, NAME FROM CCCCONNTYPE WHERE CCCCONNTYPE = :1";
         var ds = X.GETSQLDATASET(query, id);
         if (ds.EOF) {
-            return { success: false, message: "Connection type not found: " + id };
-        }
+            return { success: false, message: "Connection type not found: " + id };        }
         return { success: true, data: { id: ds.id, name: ds.NAME } };
     } catch (e) {
         return { success: false, message: "Error retrieving connection type: " + e.message };
+    }
+}
+
+/**
+ * Creates a new EDI provider configuration
+ * @param {Object} params Provider configuration object
+ * @returns {Object} Created provider with ID or error
+ */
+function createEdiProvider(params) {
+    try {
+        // Input validation
+        if (!params.provider_name || !params.conntype_id || !params.trdr_retailer || !params.trdr_client) {
+            return { success: false, message: "Required fields: provider_name, conntype_id, trdr_retailer, trdr_client" };
+        }
+
+        // First, create/get the EDI provider entry
+        var providerQuery = "SELECT CCCEDIPROVIDER FROM CCCEDIPROVIDER WHERE NAME = :1 AND CONNTYPE = :2";
+        var providerDs = X.GETSQLDATASET(providerQuery, params.provider_name, params.conntype_id);
+        
+        var providerId;
+        if (providerDs.EOF) {
+            // Create new provider
+            var insertProviderQuery = "INSERT INTO CCCEDIPROVIDER (NAME, CONNTYPE) VALUES (:1, :2)";
+            X.RUNSQL(insertProviderQuery, params.provider_name, params.conntype_id);
+            
+            var newProviderQuery = "SELECT TOP 1 CCCEDIPROVIDER FROM CCCEDIPROVIDER WHERE NAME = :1 AND CONNTYPE = :2 ORDER BY CCCEDIPROVIDER DESC";
+            var newProviderDs = X.GETSQLDATASET(newProviderQuery, params.provider_name, params.conntype_id);
+            providerId = newProviderDs.CCCEDIPROVIDER;
+        } else {
+            providerId = providerDs.CCCEDIPROVIDER;
+        }
+
+        // Create SFTP connection configuration
+        var sftpInsertQuery = "INSERT INTO CCCSFTP (" +
+            "TRDR_RETAILER, TRDR_CLIENT, URL, PORT, USERNAME, PASSPHRASE, " +
+            "INITIALDIRIN, INITIALDIROUT, FINGERPRINT, PRIVATEKEY, EDIPROVIDER" +
+            ") VALUES (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11)";
+            
+        X.RUNSQL(sftpInsertQuery,
+            params.trdr_retailer,
+            params.trdr_client,
+            params.url || '',
+            params.port || 22,
+            params.username || '',
+            params.passphrase || '',
+            params.initial_dir_in || '',
+            params.initial_dir_out || '',
+            params.fingerprint || '',
+            params.private_key || '',
+            providerId
+        );
+
+        // Get the newly created record
+        var newQuery = "SELECT TOP 1 CCCSFTP FROM CCCSFTP WHERE TRDR_RETAILER = :1 AND TRDR_CLIENT = :2 AND EDIPROVIDER = :3 ORDER BY CCCSFTP DESC";
+        var newDs = X.GETSQLDATASET(newQuery, params.trdr_retailer, params.trdr_client, providerId);
+        
+        if (newDs.EOF) {
+            return { success: false, message: "Failed to create EDI provider" };
+        }
+
+        return getEdiProvider({ id: newDs.CCCSFTP });
+        
+    } catch (e) {
+        return { success: false, message: "Error creating EDI provider: " + e.message };
+    }
+}
+
+/**
+ * Updates an existing EDI provider configuration
+ * @param {Object} params Provider update object with id and fields to update
+ * @returns {Object} Updated provider or error
+ */
+function updateEdiProvider(params) {
+    try {
+        var id = params.id;
+        if (!id) {
+            return { success: false, message: "Provider ID is required" };
+        }
+
+        // Check if exists
+        var checkQuery = "SELECT CCCSFTP FROM CCCSFTP WHERE CCCSFTP = :1";
+        var checkDs = X.GETSQLDATASET(checkQuery, id);
+        if (checkDs.EOF) {
+            return { success: false, message: "Provider not found: " + id };
+        }
+
+        // Build update query
+        var updateParts = [];
+        var values = [];
+        
+        if (params.url !== undefined) {
+            updateParts.push("URL = :" + (values.length + 1));
+            values.push(params.url);
+        }
+        if (params.port !== undefined) {
+            updateParts.push("PORT = :" + (values.length + 1));
+            values.push(params.port);
+        }
+        if (params.username !== undefined) {
+            updateParts.push("USERNAME = :" + (values.length + 1));
+            values.push(params.username);
+        }
+        if (params.passphrase !== undefined) {
+            updateParts.push("PASSPHRASE = :" + (values.length + 1));
+            values.push(params.passphrase);
+        }
+        if (params.initial_dir_in !== undefined) {
+            updateParts.push("INITIALDIRIN = :" + (values.length + 1));
+            values.push(params.initial_dir_in);
+        }
+        if (params.initial_dir_out !== undefined) {
+            updateParts.push("INITIALDIROUT = :" + (values.length + 1));
+            values.push(params.initial_dir_out);
+        }
+
+        if (updateParts.length === 0) {
+            return { success: false, message: "No fields to update" };
+        }
+
+        values.push(id);
+        var updateQuery = "UPDATE CCCSFTP SET " + updateParts.join(", ") + " WHERE CCCSFTP = :" + values.length;
+        
+        X.RUNSQL(updateQuery, values);
+        return getEdiProvider({ id: id });
+        
+    } catch (e) {
+        return { success: false, message: "Error updating EDI provider: " + e.message };
+    }
+}
+
+/**
+ * Deletes an EDI provider configuration
+ * @param {Object} params Object with id property
+ * @returns {Object} Success confirmation or error
+ */
+function deleteEdiProvider(params) {
+    try {
+        var id = params.id;
+        if (!id) {
+            return { success: false, message: "Provider ID is required" };
+        }
+
+        var checkQuery = "SELECT CCCSFTP FROM CCCSFTP WHERE CCCSFTP = :1";
+        var checkDs = X.GETSQLDATASET(checkQuery, id);
+        if (checkDs.EOF) {
+            return { success: false, message: "Provider not found: " + id };
+        }
+
+        var deleteQuery = "DELETE FROM CCCSFTP WHERE CCCSFTP = :1";
+        X.RUNSQL(deleteQuery, id);
+
+        return { success: true, message: "EDI provider deleted successfully" };
+        
+    } catch (e) {
+        return { success: false, message: "Error deleting EDI provider: " + e.message };
     }
 }
 

@@ -48,4 +48,49 @@ app.hooks({
   }
 })
 
+// Extend field-mappings service with custom methods
+const fieldMappingsService = app.service('field-mappings')
+
+// Add S1 introspection methods
+fieldMappingsService.getS1Tables = function(params) {
+  // Ensure params are structured correctly for FeathersJS find method
+  const queryParams = {
+    query: typeof params === 'string' ? { object: params } : params
+  }
+  return app.service('field-mappings/s1-tables').find(queryParams)
+}
+
+fieldMappingsService.getS1Fields = function(params) {
+  // Ensure params are structured correctly for FeathersJS find method
+  const queryParams = {
+    query: typeof params === 'string' ? { table: params } : params
+  }
+  return app.service('field-mappings/s1-fields').find(queryParams)
+}
+
+// Add XML parsing methods
+fieldMappingsService.parseXml = function(data) {
+  return app.service('field-mappings/parse-xml').create(data)
+}
+
+fieldMappingsService.validateXPath = function(data) {
+  return app.service('field-mappings/validate-xpath').create(data)
+}
+
+// Extend edi-providers service with custom methods
+const ediProvidersService = app.service('edi-providers')
+
+// Add custom methods for EDI providers
+ediProvidersService.getConnectionTypes = function() {
+  return app.service('edi-providers/connection-types').find()
+}
+
+ediProvidersService.testConnection = function(params) {
+  return app.service('edi-providers/test-connection').create(params)
+}
+
+ediProvidersService.getProvidersWithStats = function(params) {
+  return app.service('edi-providers/with-stats').find(params)
+}
+
 export { app as api }
