@@ -91,8 +91,7 @@
         :search="search"
         class="elevation-1"
         item-value="id"  
-      >
-        <!-- Provider Name with Icon -->
+      >        <!-- Provider Name with Icon -->
         <template #item.provider_name="{ item }">
           <div class="d-flex align-center">
             <v-avatar size="32" class="mr-3">
@@ -100,20 +99,22 @@
             </v-avatar>
             <div>
               <div class="font-weight-medium">{{ item.provider_name }}</div>
-              <div class="text-caption text-grey">ID: {{ item.provider_id }}</div>
+              <div class="text-caption text-grey">ID: {{ item.id }}</div>
             </div>
           </div>
         </template>
 
-        <!-- Retailer Information -->
+        <!-- Connected Information -->
         <template #item.retailer="{ item }">
-          <div v-if="item.retailer">
-            <div class="font-weight-medium">{{ item.retailer.name }}</div>
+          <div v-if="item.statistics">
+            <div class="font-weight-medium">
+              {{ item.statistics.connection_count }} Connections
+            </div>
             <div class="text-caption text-grey">
-              {{ item.retailer.code }} | {{ item.retailer.tax_id }}
+              {{ item.statistics.client_count }} clients, {{ item.statistics.retailer_count }} retailers
             </div>
           </div>
-          <span v-else class="text-grey">N/A</span>
+          <span v-else class="text-grey">No connections</span>
         </template>
 
         <!-- Connection Type -->
@@ -126,20 +127,18 @@
             <v-icon start size="small">{{ getConnectionTypeIcon(item.conntype_name) }}</v-icon>
             {{ item.conntype_name }}
           </v-chip>
-        </template>
-
-        <!-- Connection Status -->
+        </template>        <!-- Connection Status -->
         <template #item.status="{ item }">
           <div class="d-flex align-center">
             <v-chip
-              :color="item.client?.active ? 'success' : 'error'"
+              :color="item.status === 'Active' ? 'success' : 'error'"
               size="small"
               variant="tonal"
             >
               <v-icon start size="small">
-                {{ item.client?.active ? 'mdi-check-circle' : 'mdi-alert-circle' }}
+                {{ item.status === 'Active' ? 'mdi-check-circle' : 'mdi-alert-circle' }}
               </v-icon>
-              {{ item.client?.active ? 'Active' : 'Inactive' }}
+              {{ item.status }}
             </v-chip>
             <v-btn
               icon="mdi-lan-connect"
@@ -151,57 +150,59 @@
               <v-tooltip activator="parent">Test Connection</v-tooltip>
             </v-btn>
           </div>
-        </template>
-
-        <!-- Connection Details -->
+        </template>        <!-- Connection Details -->
         <template #item.connection="{ item }">
           <div class="text-caption">
-            <div v-if="item.connection_details?.url">
-              <strong>Host:</strong> {{ item.connection_details.url }}:{{ item.connection_details.port }}
+            <div v-if="item.sample_connection?.url">
+              <strong>Sample:</strong> {{ item.sample_connection.url }}:{{ item.sample_connection.port }}
             </div>
-            <div v-if="item.connection_details?.username">
-              <strong>User:</strong> {{ item.connection_details.username }}
+            <div v-if="item.sample_connection?.username">
+              <strong>User:</strong> {{ item.sample_connection.username }}
             </div>
-            <div v-if="item.client?.ws_url">
-              <strong>S1 WS:</strong> {{ item.client.ws_url }}
+            <div v-if="item.statistics">
+              <strong>Connections:</strong> {{ item.statistics.active_connections }}/{{ item.statistics.connection_count }}
             </div>
           </div>
-        </template>
-
-        <!-- Actions -->
+        </template>        <!-- Actions -->
         <template #item.actions="{ item }">
-          <div class="d-flex">
+          <div class="d-flex ga-1">
             <v-btn
               icon="mdi-eye"
               size="small"
-              variant="text"
+              variant="tonal"
+              color="primary"
               @click="viewProvider(item)"
             >
+              <v-icon>mdi-eye</v-icon>
               <v-tooltip activator="parent">View Details</v-tooltip>
             </v-btn>
             <v-btn
               icon="mdi-pencil"
               size="small"
-              variant="text"
+              variant="tonal"
+              color="secondary"
               @click="editProvider(item)"
             >
+              <v-icon>mdi-pencil</v-icon>
               <v-tooltip activator="parent">Edit</v-tooltip>
             </v-btn>
             <v-btn
               icon="mdi-cog"
               size="small"
-              variant="text"
+              variant="tonal"
+              color="info"
               @click="configureProvider(item)"
             >
+              <v-icon>mdi-cog</v-icon>
               <v-tooltip activator="parent">Configure</v-tooltip>
             </v-btn>
             <v-btn
               icon="mdi-delete"
               size="small"
-              variant="text"
+              variant="tonal"
               color="error"
               @click="confirmDelete(item)"
-            >
+            >              <v-icon>mdi-delete</v-icon>
               <v-tooltip activator="parent">Delete</v-tooltip>
             </v-btn>
           </div>
@@ -357,9 +358,7 @@
           </v-btn>
         </v-card-actions>
       </v-card>
-    </v-dialog>
-
-    <!-- Provider Details Dialog -->
+    </v-dialog>    <!-- Provider Details Dialog -->
     <v-dialog v-model="detailsDialog" max-width="1000px" scrollable>
       <v-card v-if="selectedProvider">
         <v-card-title>
@@ -368,10 +367,10 @@
             {{ selectedProvider.provider_name }}
             <v-spacer />
             <v-chip
-              :color="selectedProvider.client?.active ? 'success' : 'error'"
+              :color="selectedProvider.status === 'Active' ? 'success' : 'error'"
               variant="tonal"
             >
-              {{ selectedProvider.client?.active ? 'Active' : 'Inactive' }}
+              {{ selectedProvider.status }}
             </v-chip>
           </div>
         </v-card-title>
@@ -379,46 +378,65 @@
           <v-row>
             <v-col cols="12" md="6">
               <v-card variant="outlined">
-                <v-card-title>Connection Details</v-card-title>
+                <v-card-title>Provider Information</v-card-title>
                 <v-card-text>
-                  <div class="mb-2"><strong>Type:</strong> {{ selectedProvider.conntype_name }}</div>
-                  <div class="mb-2"><strong>Host:</strong> {{ selectedProvider.connection_details?.url }}</div>
-                  <div class="mb-2"><strong>Port:</strong> {{ selectedProvider.connection_details?.port }}</div>
-                  <div class="mb-2"><strong>Username:</strong> {{ selectedProvider.connection_details?.username }}</div>
-                  <div class="mb-2"><strong>Incoming Dir:</strong> {{ selectedProvider.connection_details?.initial_dir_in }}</div>
-                  <div class="mb-2"><strong>Outgoing Dir:</strong> {{ selectedProvider.connection_details?.initial_dir_out }}</div>
+                  <div class="mb-2"><strong>Provider ID:</strong> {{ selectedProvider.id }}</div>
+                  <div class="mb-2"><strong>Name:</strong> {{ selectedProvider.provider_name }}</div>
+                  <div class="mb-2"><strong>Connection Type:</strong> {{ selectedProvider.conntype_name }}</div>
+                  <div class="mb-2"><strong>Status:</strong> {{ selectedProvider.status }}</div>
                 </v-card-text>
               </v-card>
             </v-col>
             <v-col cols="12" md="6">
               <v-card variant="outlined">
-                <v-card-title>S1 Integration</v-card-title>
+                <v-card-title>Statistics</v-card-title>
                 <v-card-text>
-                  <div class="mb-2"><strong>WS URL:</strong> {{ selectedProvider.client?.ws_url }}</div>
-                  <div class="mb-2"><strong>WS User:</strong> {{ selectedProvider.client?.ws_user }}</div>
-                  <div class="mb-2"><strong>Company:</strong> {{ selectedProvider.client?.company }}</div>
-                  <div class="mb-2"><strong>Branch:</strong> {{ selectedProvider.client?.branch }}</div>
-                  <div class="mb-2">
-                    <strong>Status:</strong>
-                    <v-chip
-                      :color="selectedProvider.client?.active ? 'success' : 'error'"
-                      size="small"
-                      variant="tonal"
-                    >
-                      {{ selectedProvider.client?.active ? 'Active' : 'Inactive' }}
-                    </v-chip>
-                  </div>
+                  <div class="mb-2"><strong>Clients:</strong> {{ selectedProvider.statistics?.client_count || 0 }}</div>
+                  <div class="mb-2"><strong>Retailers:</strong> {{ selectedProvider.statistics?.retailer_count || 0 }}</div>
+                  <div class="mb-2"><strong>Total Connections:</strong> {{ selectedProvider.statistics?.connection_count || 0 }}</div>
+                  <div class="mb-2"><strong>Active Connections:</strong> {{ selectedProvider.statistics?.active_connections || 0 }}</div>
                 </v-card-text>
               </v-card>
             </v-col>
           </v-row>
           
-          <v-card variant="outlined" class="mt-4" v-if="selectedProvider.retailer">
-            <v-card-title>Retailer Information</v-card-title>
+          <!-- Connected Clients -->
+          <v-card variant="outlined" class="mt-4" v-if="selectedProvider.connected_clients && selectedProvider.connected_clients.length > 0">
+            <v-card-title>Connected Clients</v-card-title>
             <v-card-text>
-              <div class="mb-2"><strong>Name:</strong> {{ selectedProvider.retailer.name }}</div>
-              <div class="mb-2"><strong>Code:</strong> {{ selectedProvider.retailer.code }}</div>
-              <div class="mb-2"><strong>Tax ID:</strong> {{ selectedProvider.retailer.tax_id }}</div>
+              <v-list density="compact">
+                <v-list-item
+                  v-for="client in selectedProvider.connected_clients"
+                  :key="client.client_id"
+                >
+                  <v-list-item-title>{{ client.client_name }}</v-list-item-title>
+                  <v-list-item-subtitle>{{ client.client_ws_url }}</v-list-item-subtitle>
+                  <template #append>
+                    <v-chip
+                      :color="client.client_active ? 'success' : 'error'"
+                      size="small"
+                      variant="tonal"
+                    >
+                      {{ client.client_active ? 'Active' : 'Inactive' }}
+                    </v-chip>
+                  </template>
+                </v-list-item>              </v-list>
+            </v-card-text>
+          </v-card>
+          
+          <!-- Connected Retailers -->
+          <v-card variant="outlined" class="mt-4" v-if="selectedProvider.connected_retailers && selectedProvider.connected_retailers.length > 0">
+            <v-card-title>Connected Retailers</v-card-title>
+            <v-card-text>
+              <v-list density="compact">
+                <v-list-item
+                  v-for="retailer in selectedProvider.connected_retailers"
+                  :key="retailer.trdr_retailer"
+                >
+                  <v-list-item-title>{{ retailer.retailer_name }}</v-list-item-title>
+                  <v-list-item-subtitle>{{ retailer.retailer_code }} - {{ retailer.retailer_tax_id }}</v-list-item-subtitle>
+                </v-list-item>
+              </v-list>
             </v-card-text>
           </v-card>
         </v-card-text>
@@ -525,7 +543,7 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue'
-import api from '@/services/api'
+import { api } from '@/services/api'
 
 export default {
   name: 'EdiProviders',
@@ -672,33 +690,46 @@ export default {
       dialogTab.value = 0
       dialog.value = true
     }
-    
-    const editProvider = (provider) => {
-      editingProvider.value = provider
-      formData.value = {
-        provider_name: provider.provider_name || '',
-        conntype_id: provider.conntype_id,
-        trdr_retailer: provider.trdr_retailer,
-        url: provider.connection_details?.url || '',
-        port: provider.connection_details?.port,
-        username: provider.connection_details?.username || '',
-        passphrase: '', // Don't populate password
-        initial_dir_in: provider.connection_details?.initial_dir_in || '',
-        initial_dir_out: provider.connection_details?.initial_dir_out || '',
-        ws_url: provider.client?.ws_url || '',
-        ws_user: provider.client?.ws_user || '',
-        ws_password: '', // Don't populate password
-        ws_app_id: provider.client?.ws_app_id,
-        client_active: provider.client?.active || false
+      const editProvider = async (provider) => {
+      try {
+        editingProvider.value = provider
+        
+        // For editing, we need to get a connection since the provider data doesn't have connection details
+        // This is a limitation of the current structure - we'll set defaults for now
+        formData.value = {
+          provider_name: provider.provider_name || '',
+          conntype_id: provider.conntype_id,
+          trdr_retailer: '', // This needs to be selected by user
+          url: provider.sample_connection?.url || '',
+          port: provider.sample_connection?.port || 22,
+          username: provider.sample_connection?.username || '',
+          passphrase: '', // Don't populate password
+          initial_dir_in: '',
+          initial_dir_out: '',
+          ws_url: provider.sample_connection?.client_ws_url || '',
+          ws_user: '',
+          ws_password: '', // Don't populate password
+          ws_app_id: '',
+          client_active: false
+        }
+        dialogTab.value = 0
+        dialog.value = true
+        detailsDialog.value = false
+      } catch (error) {
+        console.error('Error preparing edit form:', error)
+        showSnackbar('Error preparing edit form: ' + error.message, 'error')
       }
-      dialogTab.value = 0
-      dialog.value = true
-      detailsDialog.value = false
     }
-    
-    const viewProvider = (provider) => {
-      selectedProvider.value = provider
-      detailsDialog.value = true
+      const viewProvider = async (provider) => {
+      try {
+        // Get detailed provider information
+        const response = await api.service('edi-providers').get(provider.id)
+        selectedProvider.value = response
+        detailsDialog.value = true
+      } catch (error) {
+        console.error('Error loading provider details:', error)
+        showSnackbar('Error loading provider details: ' + error.message, 'error')
+      }
     }
       const configureProvider = (provider) => {
       // Open configuration dialog or navigate to configuration page
@@ -877,5 +908,14 @@ export default {
 
 .v-card:hover {
   box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+}
+
+/* Ensure action buttons are visible */
+.v-btn {
+  min-width: auto !important;
+}
+
+.v-btn[variant="text"] {
+  opacity: 1 !important;
 }
 </style>

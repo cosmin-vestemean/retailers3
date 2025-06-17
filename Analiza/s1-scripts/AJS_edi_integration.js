@@ -574,23 +574,37 @@ function getRetailersClients(params) {
     try {
         var companyId = X.SYS.COMPANY;
         var query =
-            "SELECT TRDR_CLIENT as id, NAME, WSURL, WSUSER, WSPASS, COMPANY, BRANCH " +
+            "SELECT TRDR_CLIENT as id, NAME, WSURL, WSUSER, WSPASS, COMPANY, BRANCH, ACTIVE, APPID " +
             "FROM CCCRETAILERSCLIENTS " +
             "WHERE COMPANY = " + companyId +
-            " AND ACTIVE = 1 AND TRDR_CLIENT = :1 " +
-            "ORDER BY NAME";
-        var ds = X.GETSQLDATASET(query, 1);
+            " ORDER BY NAME";
+        var ds = X.GETSQLDATASET(query);
         var result = [];
         ds.FIRST;
         while (!ds.EOF) {
+            // Get connection statistics for this client
+            var statsQuery = "SELECT " +
+                "COUNT(DISTINCT TRDR_RETAILER) as retailer_count, " +
+                "COUNT(*) as connection_count, " +
+                "COUNT(DISTINCT EDIPROVIDER) as provider_count " +
+                "FROM CCCSFTP WHERE TRDR_CLIENT = :1";
+            var statsDs = X.GETSQLDATASET(statsQuery, ds.id);
+            
             result.push({
                 id: ds.id,
                 name: ds.NAME,
                 wsurl: ds.WSURL,
                 wsuser: ds.WSUSER,
-                wspass: ds.WSPASS,
+                wspass: ds.WSPASS ? '[CONFIGURED]' : null, // Don't expose actual password
                 company: ds.COMPANY,
-                branch: ds.BRANCH
+                branch: ds.BRANCH,
+                active: ds.ACTIVE === 1,
+                appid: ds.APPID,
+                statistics: {
+                    retailer_count: statsDs.EOF ? 0 : (statsDs.retailer_count || 0),
+                    connection_count: statsDs.EOF ? 0 : (statsDs.connection_count || 0),
+                    provider_count: statsDs.EOF ? 0 : (statsDs.provider_count || 0)
+                }
             });
             ds.NEXT;
         }
@@ -616,10 +630,10 @@ function getRetailersClient(params) {
             return { success: false, message: "Client ID is required" };
         }
         var query =
-            "SELECT TRDR_CLIENT as id, NAME, WSURL, WSUSER, WSPASS, COMPANY, BRANCH " +
+            "SELECT TRDR_CLIENT as id, NAME, WSURL, WSUSER, WSPASS, COMPANY, BRANCH, ACTIVE, APPID " +
             "FROM CCCRETAILERSCLIENTS " +
             "WHERE COMPANY = " + companyId +
-            " AND TRDR_CLIENT = :1 AND ACTIVE = 1";
+            " AND TRDR_CLIENT = :1";
         var ds = X.GETSQLDATASET(query, id);
         if (ds.EOF) {
             return {
@@ -627,13 +641,52 @@ function getRetailersClient(params) {
                 message: "Client not found: " + id
             };
         }
+        
+        // Get connection statistics for this client
+        var statsQuery = "SELECT " +
+            "COUNT(DISTINCT TRDR_RETAILER) as retailer_count, " +
+            "COUNT(*) as connection_count, " +
+            "COUNT(DISTINCT EDIPROVIDER) as provider_count " +
+            "FROM CCCSFTP WHERE TRDR_CLIENT = :1";
+        var statsDs = X.GETSQLDATASET(statsQuery, id);
+        
+        // Get connected retailers list
+        var retailersQuery = "SELECT DISTINCT " +
+            "s.TRDR_RETAILER, " +
+            "r.NAME as retailer_name, " +
+            "r.CODE as retailer_code " +
+            "FROM CCCSFTP s " +
+            "LEFT JOIN TRDR r ON r.COMPANY = " + companyId + " AND r.TRDR = s.TRDR_RETAILER " +
+            "WHERE s.TRDR_CLIENT = :1";
+        var retailersDs = X.GETSQLDATASET(retailersQuery, id);
+        var retailers = [];
+        retailersDs.FIRST;
+        while (!retailersDs.EOF) {
+            retailers.push({
+                trdr_retailer: retailersDs.TRDR_RETAILER,
+                retailer_name: retailersDs.retailer_name,
+                retailer_code: retailersDs.retailer_code
+            });
+            retailersDs.NEXT;
+        }
+        
         var client = {
-            id: ds.id, name: ds.NAME,
-            wsurl: ds.WSURL, wsuser: ds.WSUSER,
-            wspass: ds.WSPASS, company: ds.COMPANY,
-            branch: ds.BRANCH
-        };
-        return { success: true, data: client };
+            id: ds.id,
+            name: ds.NAME,
+            wsurl: ds.WSURL,
+            wsuser: ds.WSUSER,
+            wspass: ds.WSPASS ? '[CONFIGURED]' : null, // Don't expose actual password
+            company: ds.COMPANY,
+            branch: ds.BRANCH,
+            active: ds.ACTIVE === 1,
+            appid: ds.APPID,
+            statistics: {
+                retailer_count: statsDs.EOF ? 0 : (statsDs.retailer_count || 0),
+                connection_count: statsDs.EOF ? 0 : (statsDs.connection_count || 0),
+                provider_count: statsDs.EOF ? 0 : (statsDs.provider_count || 0)
+            },
+            connected_retailers: retailers
+        };        return { success: true, data: client };
     } catch (e) {
         return {
             success: false,
@@ -643,11 +696,12 @@ function getRetailersClient(params) {
 }
 
 /**
- * Gets all EDI providers
+ * Gets all connections (client-provider-retailer combinations) with full details
+ * This returns the operational connections, not the EDI providers themselves
  * @param {Object} params Optional filters (ignored for now)
- * @returns {Object} List of providers
+ * @returns {Object} List of connections with provider, retailer, and connection details
  */
-function getEdiProviders(params) {
+function getConnections(params) {
     try {
         var query = "SELECT " +
             "a.CCCSFTP as id, " +
@@ -699,24 +753,105 @@ function getEdiProviders(params) {
                     initial_dir_out: ds.INITIALDIROUT,
                     fingerprint: ds.FINGERPRINT,
                     private_key: ds.PRIVATEKEY ? '[CONFIGURED]' : null
-                },
-                client_active: ds.client_active ? true : false,
+                },                client_active: ds.client_active ? true : false,
                 client_ws_url: ds.client_ws_url
             });
             ds.NEXT;
         }
         return { success: true, data: result, total: result.length };
     } catch (e) {
+        return { success: false, message: "Error retrieving connections: " + e.message };
+    }
+}
+
+/**
+ * Gets all actual EDI providers with aggregated statistics
+ * Returns the provider companies themselves, not individual connections
+ * @param {Object} params Optional filter parameters
+ * @returns {Object} List of EDI providers with statistics
+ */
+function getEdiProviders(params) {
+    try {        // Get unique providers with their basic info and connection type
+        var providerQuery = "SELECT " +
+            "ep.CCCEDIPROVIDER as id, " +
+            "ep.NAME as provider_name, " +
+            "ep.CONNTYPE as conntype_id, " +
+            "ct.NAME as conntype_name " +
+            "FROM CCCEDIPROVIDER ep " +
+            "LEFT JOIN CCCCONNTYPE ct ON ep.CONNTYPE = ct.CCCCONNTYPE " +
+            "ORDER BY ep.NAME";
+        
+        var providerDs = X.GETSQLDATASET(providerQuery);
+        var providers = [];
+        
+        providerDs.FIRST;
+        while (!providerDs.EOF) {
+            var providerId = providerDs.id;
+            
+            // Get statistics for this provider
+            var statsQuery = "SELECT " +
+                "COUNT(DISTINCT a.TRDR_CLIENT) as client_count, " +
+                "COUNT(DISTINCT a.TRDR_RETAILER) as retailer_count, " +
+                "COUNT(*) as connection_count, " +
+                "SUM(CASE WHEN cl.ACTIVE = 1 THEN 1 ELSE 0 END) as active_connections " +
+                "FROM CCCSFTP a " +
+                "LEFT JOIN CCCRETAILERSCLIENTS cl ON cl.TRDR_CLIENT = a.TRDR_CLIENT " +
+                "WHERE a.EDIPROVIDER = :1";
+            
+            var statsDs = X.GETSQLDATASET(statsQuery, providerId);
+            
+            // Get sample connection details (from first connection)
+            var sampleQuery = "SELECT TOP 1 " +
+                "a.URL, a.PORT, a.USERNAME, " +
+                "cl.WSURL as client_ws_url " +
+                "FROM CCCSFTP a " +
+                "LEFT JOIN CCCRETAILERSCLIENTS cl ON cl.TRDR_CLIENT = a.TRDR_CLIENT " +
+                "WHERE a.EDIPROVIDER = :1";
+            
+            var sampleDs = X.GETSQLDATASET(sampleQuery, providerId);            var provider = {
+                id: providerId,
+                provider_name: providerDs.provider_name,
+                conntype_id: providerDs.conntype_id,
+                conntype_name: providerDs.conntype_name,
+                
+                // Statistics
+                statistics: {
+                    client_count: statsDs.EOF ? 0 : (statsDs.client_count || 0),
+                    retailer_count: statsDs.EOF ? 0 : (statsDs.retailer_count || 0),
+                    connection_count: statsDs.EOF ? 0 : (statsDs.connection_count || 0),
+                    active_connections: statsDs.EOF ? 0 : (statsDs.active_connections || 0)
+                },
+                
+                // Sample connection details (for display purposes)
+                sample_connection: sampleDs.EOF ? null : {
+                    url: sampleDs.URL,
+                    port: sampleDs.PORT,
+                    username: sampleDs.USERNAME,
+                    client_ws_url: sampleDs.client_ws_url
+                },
+                
+                // Computed properties
+                status: (statsDs.EOF ? 0 : (statsDs.active_connections || 0)) > 0 ? 'Active' : 'Inactive',
+                connection_status: !statsDs.EOF && statsDs.connection_count > 0
+            };
+            
+            providers.push(provider);
+            providerDs.NEXT;
+        }
+        
+        return { success: true, data: providers, total: providers.length };
+    } catch (e) {
         return { success: false, message: "Error retrieving EDI providers: " + e.message };
     }
 }
 
 /**
- * Gets a single EDI provider by ID (CCCSFTP.CCCSFTP)
+ * Gets a single connection by ID (CCCSFTP.CCCSFTP)
+ * This was previously called getEdiProvider but actually returns a connection
  * @param {Object} params Object with id property
- * @returns {Object} Single provider with full connection details or error
+ * @returns {Object} Single connection with full details or error
  */
-function getEdiProvider(params) {
+function getConnection(params) {
     try {
         var id = params.id;
         if (!id) {
@@ -786,9 +921,117 @@ function getEdiProvider(params) {
                 ws_url: ds.client_ws_url,
                 ws_user: ds.client_ws_user,
                 company: ds.client_company,
-                branch: ds.client_branch,
-                active: ds.client_active ? true : false
+                branch: ds.client_branch,                active: ds.client_active ? true : false
             }
+        };
+        return { success: true, data: provider };
+    } catch (e) {
+        return { success: false, message: "Error retrieving connection: " + e.message };
+    }
+}
+
+/**
+ * Gets a single EDI provider by ID with full details and statistics
+ * @param {Object} params Object with id property (CCCEDIPROVIDER.CCCEDIPROVIDER)
+ * @returns {Object} Single EDI provider with details, statistics, and connections
+ */
+function getEdiProvider(params) {
+    try {
+        var id = params.id;
+        if (!id) {
+            return { success: false, message: "Provider ID is required" };
+        }
+          // Get provider details
+        var providerQuery = "SELECT " +
+            "ep.CCCEDIPROVIDER as id, " +
+            "ep.NAME as provider_name, " +
+            "ep.CONNTYPE as conntype_id, " +
+            "ct.NAME as conntype_name " +
+            "FROM CCCEDIPROVIDER ep " +
+            "LEFT JOIN CCCCONNTYPE ct ON ep.CONNTYPE = ct.CCCCONNTYPE " +
+            "WHERE ep.CCCEDIPROVIDER = :1";
+        
+        var providerDs = X.GETSQLDATASET(providerQuery, id);
+        if (providerDs.EOF) {
+            return { success: false, message: "EDI provider not found: " + id };
+        }
+        
+        // Get detailed statistics
+        var statsQuery = "SELECT " +
+            "COUNT(DISTINCT a.TRDR_CLIENT) as client_count, " +
+            "COUNT(DISTINCT a.TRDR_RETAILER) as retailer_count, " +
+            "COUNT(*) as connection_count, " +
+            "SUM(CASE WHEN cl.ACTIVE = 1 THEN 1 ELSE 0 END) as active_connections " +
+            "FROM CCCSFTP a " +
+            "LEFT JOIN CCCRETAILERSCLIENTS cl ON cl.TRDR_CLIENT = a.TRDR_CLIENT " +
+            "WHERE a.EDIPROVIDER = :1";
+        
+        var statsDs = X.GETSQLDATASET(statsQuery, id);
+        
+        // Get connected clients
+        var clientsQuery = "SELECT DISTINCT " +
+            "cl.TRDR_CLIENT as client_id, " +
+            "cl.NAME as client_name, " +
+            "cl.WSURL as client_ws_url, " +
+            "cl.ACTIVE as client_active " +
+            "FROM CCCSFTP a " +
+            "LEFT JOIN CCCRETAILERSCLIENTS cl ON cl.TRDR_CLIENT = a.TRDR_CLIENT " +
+            "WHERE a.EDIPROVIDER = :1";
+        
+        var clientsDs = X.GETSQLDATASET(clientsQuery, id);
+        var clients = [];
+        clientsDs.FIRST;
+        while (!clientsDs.EOF) {
+            clients.push({
+                client_id: clientsDs.client_id,
+                client_name: clientsDs.client_name,
+                client_ws_url: clientsDs.client_ws_url,
+                client_active: clientsDs.client_active === 1
+            });
+            clientsDs.NEXT;
+        }
+        
+        // Get connected retailers
+        var retailersQuery = "SELECT DISTINCT " +
+            "a.TRDR_RETAILER, " +
+            "r.NAME as retailer_name, " +
+            "r.CODE as retailer_code, " +
+            "r.AFM as retailer_tax_id " +
+            "FROM CCCSFTP a " +
+            "LEFT JOIN TRDR r ON r.COMPANY = " + X.SYS.COMPANY + " AND r.TRDR = a.TRDR_RETAILER " +
+            "WHERE a.EDIPROVIDER = :1";
+        
+        var retailersDs = X.GETSQLDATASET(retailersQuery, id);
+        var retailers = [];
+        retailersDs.FIRST;
+        while (!retailersDs.EOF) {
+            retailers.push({
+                trdr_retailer: retailersDs.TRDR_RETAILER,
+                retailer_name: retailersDs.retailer_name,
+                retailer_code: retailersDs.retailer_code,
+                retailer_tax_id: retailersDs.retailer_tax_id
+            });
+            retailersDs.NEXT;
+        }        var provider = {
+            id: providerDs.id,
+            provider_name: providerDs.provider_name,
+            conntype_id: providerDs.conntype_id,
+            conntype_name: providerDs.conntype_name,
+            
+            // Statistics
+            statistics: {
+                client_count: statsDs.EOF ? 0 : (statsDs.client_count || 0),
+                retailer_count: statsDs.EOF ? 0 : (statsDs.retailer_count || 0),
+                connection_count: statsDs.EOF ? 0 : (statsDs.connection_count || 0),
+                active_connections: statsDs.EOF ? 0 : (statsDs.active_connections || 0)
+            },
+            
+            // Connected entities
+            connected_clients: clients,
+            connected_retailers: retailers,
+            
+            // Computed properties
+            status: (statsDs.EOF ? 0 : (statsDs.active_connections || 0)) > 0 ? 'Active' : 'Inactive'
         };
         
         return { success: true, data: provider };
@@ -805,7 +1048,7 @@ function getEdiProvider(params) {
 function getConnTypes(params) {
     try {
         var query = "SELECT CCCCONNTYPE as id, NAME FROM CCCCONNTYPE ORDER BY NAME";
-        var ds
+        var ds = X.GETSQLDATASET(query);
         var result = [];
         ds.FIRST;
         while (!ds.EOF) {
@@ -829,10 +1072,10 @@ function getConnType(params) {
         if (!id) {
             return { success: false, message: "Connection type ID is required" };
         }
-        var query = "SELECT CCCCONNTYPE as id, NAME FROM CCCCONNTYPE WHERE CCCCONNTYPE = :1";
-        var ds = X.GETSQLDATASET(query, id);
+        var query = "SELECT CCCCONNTYPE as id, NAME FROM CCCCONNTYPE WHERE CCCCONNTYPE = :1";        var ds = X.GETSQLDATASET(query, id);
         if (ds.EOF) {
-            return { success: false, message: "Connection type not found: " + id };        }
+            return { success: false, message: "Connection type not found: " + id };
+        }
         return { success: true, data: { id: ds.id, name: ds.NAME } };
     } catch (e) {
         return { success: false, message: "Error retrieving connection type: " + e.message };
@@ -886,9 +1129,7 @@ function createEdiProvider(params) {
             params.fingerprint || '',
             params.private_key || '',
             providerId
-        );
-
-        // Get the newly created record
+        );        // Get the newly created record
         var newQuery = "SELECT TOP 1 CCCSFTP FROM CCCSFTP WHERE TRDR_RETAILER = :1 AND TRDR_CLIENT = :2 AND EDIPROVIDER = :3 ORDER BY CCCSFTP DESC";
         var newDs = X.GETSQLDATASET(newQuery, params.trdr_retailer, params.trdr_client, providerId);
         
@@ -896,7 +1137,7 @@ function createEdiProvider(params) {
             return { success: false, message: "Failed to create EDI provider" };
         }
 
-        return getEdiProvider({ id: newDs.CCCSFTP });
+        return getConnection({ id: newDs.CCCSFTP });
         
     } catch (e) {
         return { success: false, message: "Error creating EDI provider: " + e.message };
@@ -953,13 +1194,34 @@ function updateEdiProvider(params) {
 
         if (updateParts.length === 0) {
             return { success: false, message: "No fields to update" };
-        }
-
-        values.push(id);
+        }        values.push(id);
         var updateQuery = "UPDATE CCCSFTP SET " + updateParts.join(", ") + " WHERE CCCSFTP = :" + values.length;
         
-        X.RUNSQL(updateQuery, values);
-        return getEdiProvider({ id: id });
+        // X.RUNSQL doesn't accept arrays, we need to call it with individual parameters
+        switch (values.length) {
+            case 2:
+                X.RUNSQL(updateQuery, values[0], values[1]);
+                break;
+            case 3:
+                X.RUNSQL(updateQuery, values[0], values[1], values[2]);
+                break;
+            case 4:
+                X.RUNSQL(updateQuery, values[0], values[1], values[2], values[3]);
+                break;
+            case 5:
+                X.RUNSQL(updateQuery, values[0], values[1], values[2], values[3], values[4]);
+                break;
+            case 6:
+                X.RUNSQL(updateQuery, values[0], values[1], values[2], values[3], values[4], values[5]);
+                break;
+            case 7:
+                X.RUNSQL(updateQuery, values[0], values[1], values[2], values[3], values[4], values[5], values[6]);
+                break;
+            default:
+                return { success: false, message: "Too many fields to update" };
+        }
+        
+        return getConnection({ id: id });
         
     } catch (e) {
         return { success: false, message: "Error updating EDI provider: " + e.message };

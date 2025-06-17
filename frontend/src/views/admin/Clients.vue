@@ -13,16 +13,32 @@
       >
         Add Client
       </v-btn>
-    </v-toolbar>
-
-    <!-- Data Table -->
+    </v-toolbar>    <!-- Data Table -->
     <v-data-table
       v-model:items-per-page="itemsPerPage"
       :headers="headers"
       :items="clients"
       :loading="loading"
       class="elevation-1"
-    >      <template #item.active="{ item }">
+    >
+      <!-- Company/Branch Column -->
+      <template #item.company_branch="{ item }">
+        <div class="text-caption">
+          <div><strong>Company:</strong> {{ item.company }}</div>
+          <div><strong>Branch:</strong> {{ item.branch }}</div>
+        </div>
+      </template>
+
+      <!-- Statistics Column -->
+      <template #item.statistics="{ item }">
+        <div class="text-caption" v-if="item.statistics">
+          <div><strong>Retailers:</strong> {{ item.statistics.retailer_count }}</div>
+          <div><strong>Connections:</strong> {{ item.statistics.connection_count }}</div>
+          <div><strong>Providers:</strong> {{ item.statistics.provider_count }}</div>
+        </div>
+      </template>
+
+      <template #item.active="{ item }">
         <v-chip
           :color="item.active ? 'success' : 'error'"
           size="small"
@@ -56,8 +72,7 @@
           <span class="text-h5">{{ isEditing ? 'Edit' : 'Create' }} Client</span>
         </v-card-title>
 
-        <v-card-text>
-          <v-form ref="form" v-model="formValid">
+        <v-card-text>          <v-form ref="form" v-model="formValid">
             <v-text-field
               v-model="editedItem.name"
               label="Client Name"
@@ -66,23 +81,50 @@
             />
             
             <v-text-field
-              v-model="editedItem.contact_email"
-              label="Contact Email"
-              type="email"
-              :rules="emailRules"
+              v-model="editedItem.wsurl"
+              label="Web Service URL"
+              :rules="urlRules"
+              required
+              placeholder="https://yourcompany.oncloud.gr/s1services"
+            />
+            
+            <v-text-field
+              v-model="editedItem.wsuser"
+              label="Web Service User"
+              :rules="requiredRules"
               required
             />
             
             <v-text-field
-              v-model="editedItem.contact_phone"
-              label="Contact Phone"
-              :rules="phoneRules"
+              v-model="editedItem.wspass"
+              label="Web Service Password"
+              type="password"
+              :rules="requiredRules"
+              required
             />
             
-            <v-textarea
-              v-model="editedItem.description"
-              label="Description"
-              rows="3"
+            <v-text-field
+              v-model="editedItem.appid"
+              label="App ID"
+              type="number"
+              :rules="appidRules"
+              required
+            />
+            
+            <v-text-field
+              v-model="editedItem.company"
+              label="Company"
+              type="number"
+              :rules="requiredRules"
+              required
+            />
+            
+            <v-text-field
+              v-model="editedItem.branch"
+              label="Branch"
+              type="number"
+              :rules="requiredRules"
+              required
             />
             
             <v-switch
@@ -157,20 +199,25 @@ export default {
     const deleting = ref(false)
     const itemsPerPage = ref(10)
     const form = ref(null)
-    
-    const editedItem = ref({
+      const editedItem = ref({
       name: '',
-      contact_email: '',
-      contact_phone: '',
-      description: '',
+      wsurl: '',
+      wsuser: '',
+      wspass: '',
+      appid: '',
+      company: '',
+      branch: '',
       active: true
     })
     
     const defaultItem = {
       name: '',
-      contact_email: '',
-      contact_phone: '',
-      description: '',
+      wsurl: '',
+      wsuser: '',
+      wspass: '',
+      appid: '',
+      company: '',
+      branch: '',
       active: true
     }
     
@@ -185,8 +232,10 @@ export default {
     
     const headers = [
       { title: 'Name', key: 'name', sortable: true },
-      { title: 'Contact Email', key: 'contact_email', sortable: true },
-      { title: 'Contact Phone', key: 'contact_phone', sortable: false },
+      { title: 'Web Service URL', key: 'wsurl', sortable: true },
+      { title: 'App ID', key: 'appid', sortable: true },
+      { title: 'Company/Branch', key: 'company_branch', sortable: false },
+      { title: 'Statistics', key: 'statistics', sortable: false },
       { title: 'Status', key: 'active', sortable: true },
       { title: 'Actions', key: 'actions', sortable: false, width: '120px' }
     ]
@@ -196,13 +245,17 @@ export default {
       v => v.length >= 3 || 'Name must be at least 3 characters'
     ]
     
-    const emailRules = [
-      v => !!v || 'Email is required',
-      v => /.+@.+\..+/.test(v) || 'Email must be valid'
+    const urlRules = [
+      v => !!v || 'Web Service URL is required',
+      v => /^https?:\/\/.+/.test(v) || 'Must be a valid URL'
     ]
     
-    const phoneRules = [
-      v => !v || v.length >= 10 || 'Phone must be at least 10 characters'
+    const requiredRules = [
+      v => !!v || 'This field is required'
+    ]    
+    const appidRules = [
+      v => !!v || 'App ID is required',
+      v => !isNaN(v) && parseInt(v) > 0 || 'Must be a positive number'
     ]
     
     const fetchClients = async () => {
@@ -299,8 +352,7 @@ export default {
       loading,
       dialog,
       deleteDialog,
-      formValid,
-      saving,
+      formValid,      saving,
       deleting,
       itemsPerPage,
       form,
@@ -310,8 +362,9 @@ export default {
       snackbar,
       headers,
       nameRules,
-      emailRules,
-      phoneRules,
+      urlRules,
+      requiredRules,
+      appidRules,
       fetchClients,
       openCreateDialog,
       openEditDialog,
