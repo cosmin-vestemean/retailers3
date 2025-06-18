@@ -217,132 +217,30 @@
           <span class="text-h5">
             {{ editingProvider ? 'Edit EDI Provider' : 'Create EDI Provider' }}
           </span>
-        </v-card-title>
-        <v-card-text>
+        </v-card-title>        <v-card-text>
           <v-form ref="form" v-model="formValid">
-            <v-tabs v-model="dialogTab">
-              <v-tab>Basic Info</v-tab>
-              <v-tab>Connection</v-tab>
-              <v-tab>S1 Integration</v-tab>
-            </v-tabs>
-
-            <v-tabs-window v-model="dialogTab">
-              <!-- Basic Information -->
-              <v-tabs-window-item>
-                <div class="pa-4">
-                  <v-text-field
-                    v-model="formData.provider_name"
-                    label="Provider Name"
-                    :rules="[v => !!v || 'Provider name is required']"
-                    variant="outlined"
-                    required
-                  />
-                  
-                  <v-select
-                    v-model="formData.conntype_id"
-                    :items="connectionTypes"
-                    item-title="name"
-                    item-value="id"
-                    label="Connection Type"
-                    :rules="[v => !!v || 'Connection type is required']"
-                    variant="outlined"
-                    required
-                  />
-
-                  <v-autocomplete
-                    v-model="formData.trdr_retailer"
-                    :items="retailers"
-                    item-title="name"
-                    item-value="trdr"
-                    label="Retailer"
-                    variant="outlined"
-                    clearable
-                  />
-                </div>
-              </v-tabs-window-item>
-
-              <!-- Connection Settings -->
-              <v-tabs-window-item>
-                <div class="pa-4">
-                  <v-text-field
-                    v-model="formData.url"
-                    label="Host/URL"
-                    :rules="[v => !!v || 'Host is required']"
-                    variant="outlined"
-                    required
-                  />
-
-                  <v-text-field
-                    v-model="formData.port"
-                    label="Port"
-                    type="number"
-                    variant="outlined"
-                  />
-
-                  <v-text-field
-                    v-model="formData.username"
-                    label="Username"
-                    variant="outlined"
-                  />
-
-                  <v-text-field
-                    v-model="formData.passphrase"
-                    label="Password/Passphrase"
-                    type="password"
-                    variant="outlined"
-                  />
-
-                  <v-text-field
-                    v-model="formData.initial_dir_in"
-                    label="Incoming Directory"
-                    variant="outlined"
-                  />
-
-                  <v-text-field
-                    v-model="formData.initial_dir_out" 
-                    label="Outgoing Directory"
-                    variant="outlined"
-                  />
-                </div>
-              </v-tabs-window-item>
-
-              <!-- S1 Integration -->
-              <v-tabs-window-item>
-                <div class="pa-4">
-                  <v-text-field
-                    v-model="formData.ws_url"
-                    label="S1 Web Service URL"
-                    variant="outlined"
-                  />
-
-                  <v-text-field
-                    v-model="formData.ws_user"
-                    label="S1 Web Service User"
-                    variant="outlined"
-                  />
-
-                  <v-text-field
-                    v-model="formData.ws_password"
-                    label="S1 Web Service Password"
-                    type="password" 
-                    variant="outlined"
-                  />
-
-                  <v-text-field
-                    v-model="formData.ws_app_id"
-                    label="S1 Application ID"
-                    type="number"
-                    variant="outlined"
-                  />
-
-                  <v-switch
-                    v-model="formData.client_active"
-                    label="S1 Integration Active"
-                    color="primary"
-                  />
-                </div>
-              </v-tabs-window-item>
-            </v-tabs-window>
+            <div class="pa-4">
+              <v-text-field
+                v-model="formData.provider_name"
+                label="Provider Name"
+                :rules="[v => !!v || 'Provider name is required']"
+                variant="outlined"
+                density="compact"
+                required
+              />
+              
+              <v-select
+                v-model="formData.conntype_id"
+                :items="connectionTypes"
+                item-title="name"
+                item-value="id"
+                label="Connection Type"
+                :rules="[v => !!v || 'Connection type is required']"
+                variant="outlined"
+                density="compact"
+                required
+              />
+            </div>
           </v-form>
         </v-card-text>
         <v-card-actions>
@@ -548,15 +446,13 @@ import { api } from '@/services/api'
 export default {
   name: 'EdiProviders',
   setup() {
-    
-    // Reactive data
+      // Reactive data
     const loading = ref(false)
     const saving = ref(false)
     const deleting = ref(false)
     const testingConnection = ref(null)
     const providers = ref([])
     const connectionTypes = ref([])
-    const retailers = ref([])
     
     // Dialog states
     const dialog = ref(false)
@@ -564,9 +460,7 @@ export default {
     const deleteDialog = ref(false)
     const showStatsDialog = ref(false)
     const showTestResults = ref(false)
-    
-    // Form data
-    const dialogTab = ref(0)
+      // Form data
     const formValid = ref(false)
     const editingProvider = ref(null)
     const selectedProvider = ref(null)
@@ -586,23 +480,10 @@ export default {
     const statusFilter = ref(null)
     const connectionTypeFilter = ref(null)
     const itemsPerPage = ref(25)
-    
-    // Form data structure
+      // Form data structure
     const defaultFormData = {
       provider_name: '',
-      conntype_id: null,
-      trdr_retailer: null,
-      url: '',
-      port: null,
-      username: '',
-      passphrase: '',
-      initial_dir_in: '',
-      initial_dir_out: '',
-      ws_url: '',
-      ws_user: '',
-      ws_password: '',
-      ws_app_id: null,
-      client_active: true
+      conntype_id: null
     }
     
     const formData = ref({ ...defaultFormData })
@@ -665,21 +546,8 @@ export default {
       } catch (error) {
         console.error('Error loading connection types:', error)
       }
-    }
-    
-    const loadRetailers = async () => {
-      try {
-        // Mock retailers for now - implement actual API call
-        retailers.value = [
-          { trdr: 1, name: 'Auchan', code: 'AUCH' },
-          { trdr: 2, name: 'Dedeman', code: 'DEDE' },
-          { trdr: 3, name: 'Carrefour', code: 'CARR' }
-        ]
-      } catch (error) {
-        console.error('Error loading retailers:', error)
-      }
-    }
-      const refreshProviders = async () => {
+    }    
+    const refreshProviders = async () => {
       await loadProviders()
       showSnackbar('EDI providers refreshed', 'success')
     }
@@ -687,32 +555,18 @@ export default {
     const openCreateDialog = () => {
       editingProvider.value = null
       formData.value = { ...defaultFormData }
-      dialogTab.value = 0
       dialog.value = true
     }
-      const editProvider = async (provider) => {
+    
+    const editProvider = async (provider) => {
       try {
         editingProvider.value = provider
         
-        // For editing, we need to get a connection since the provider data doesn't have connection details
-        // This is a limitation of the current structure - we'll set defaults for now
+        // Only populate basic provider information
         formData.value = {
           provider_name: provider.provider_name || '',
-          conntype_id: provider.conntype_id,
-          trdr_retailer: '', // This needs to be selected by user
-          url: provider.sample_connection?.url || '',
-          port: provider.sample_connection?.port || 22,
-          username: provider.sample_connection?.username || '',
-          passphrase: '', // Don't populate password
-          initial_dir_in: '',
-          initial_dir_out: '',
-          ws_url: provider.sample_connection?.client_ws_url || '',
-          ws_user: '',
-          ws_password: '', // Don't populate password
-          ws_app_id: '',
-          client_active: false
+          conntype_id: provider.conntype_id
         }
-        dialogTab.value = 0
         dialog.value = true
         detailsDialog.value = false
       } catch (error) {
@@ -832,13 +686,11 @@ export default {
       }
       return icons[type] || 'mdi-connection'
     }
-    
-    // Lifecycle
+      // Lifecycle
     onMounted(async () => {
       await Promise.all([
         loadProviders(),
-        loadConnectionTypes(),
-        loadRetailers()
+        loadConnectionTypes()
       ])
     })
     
@@ -847,19 +699,15 @@ export default {
       loading,
       saving,
       deleting,
-      testingConnection,
-      providers,
+      testingConnection,      providers,
       connectionTypes,
-      retailers,
       
       // Dialog states
       dialog,
       detailsDialog,
       deleteDialog,
       showStatsDialog,
-      showTestResults,
-        // Form data
-      dialogTab,
+      showTestResults,      // Form data
       formValid,
       editingProvider,
       selectedProvider,
