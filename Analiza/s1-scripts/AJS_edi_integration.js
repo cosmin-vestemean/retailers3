@@ -721,14 +721,17 @@ function getConnections(params) {
             "c.NAME as conntype_name, " +
             "r.NAME as retailer_name, " +
             "r.CODE as retailer_code, " +
+            "r.AFM as retailer_tax_id, " +
+            "cl.NAME as client_name, " +
             "cl.WSURL as client_ws_url, " +
-            "cl.ACTIVE as client_active " +
+            "cl.ACTIVE as client_active, " +
+            "cl.APPID as client_appid " +
             "FROM CCCSFTP a " +
             "INNER JOIN CCCEDIPROVIDER b ON a.EDIPROVIDER = b.CCCEDIPROVIDER " +
             "INNER JOIN CCCCONNTYPE c ON c.CCCCONNTYPE = b.CONNTYPE " +
             "LEFT JOIN TRDR r ON r.COMPANY = " + X.SYS.COMPANY + " AND r.TRDR = a.TRDR_RETAILER " +
             "LEFT JOIN CCCRETAILERSCLIENTS cl ON cl.TRDR_CLIENT = a.TRDR_CLIENT " +
-            "ORDER BY b.NAME, r.NAME";
+            "ORDER BY cl.NAME, b.NAME, r.NAME";
         
         var ds = X.GETSQLDATASET(query);
         var result = [];
@@ -738,23 +741,48 @@ function getConnections(params) {
                 id: ds.id,
                 trdr_retailer: ds.TRDR_RETAILER,
                 trdr_client: ds.TRDR_CLIENT,
-                retailer_name: ds.retailer_name || 'Unknown',
-                retailer_code: ds.retailer_code || '',
-                provider_id: ds.provider_id,
-                provider_name: ds.provider_name,
-                conntype_id: ds.conntype_id,
-                conntype_name: ds.conntype_name,
+                
+                // Retailer information
+                retailer: {
+                    id: ds.TRDR_RETAILER,
+                    name: ds.retailer_name || 'Unknown Retailer',
+                    code: ds.retailer_code || '',
+                    tax_id: ds.retailer_tax_id || ''
+                },
+                
+                // Client information
+                client: {
+                    id: ds.TRDR_CLIENT,
+                    name: ds.client_name || 'Unknown Client',
+                    ws_url: ds.client_ws_url,
+                    active: ds.client_active === 1,
+                    appid: ds.client_appid
+                },
+                
+                // Provider information
+                provider: {
+                    id: ds.provider_id,
+                    name: ds.provider_name,
+                    conntype_id: ds.conntype_id,
+                    conntype_name: ds.conntype_name
+                },
+                
+                // Connection technical details
                 connection_details: {
                     url: ds.URL,
                     port: ds.PORT,
                     username: ds.USERNAME,
-                    passphrase: ds.PASSPHRASE,
+                    passphrase: ds.PASSPHRASE ? '[CONFIGURED]' : null,
                     initial_dir_in: ds.INITIALDIRIN,
                     initial_dir_out: ds.INITIALDIROUT,
                     fingerprint: ds.FINGERPRINT,
                     private_key: ds.PRIVATEKEY ? '[CONFIGURED]' : null
-                },                client_active: ds.client_active ? true : false,
-                client_ws_url: ds.client_ws_url
+                },
+                
+                // Computed fields for matrix view
+                connection_name: (ds.client_name || 'Unknown') + ' → ' + (ds.provider_name || 'Unknown') + ' → ' + (ds.retailer_name || 'Unknown'),
+                status: ds.client_active === 1 ? 'Active' : 'Inactive',
+                connection_type: ds.conntype_name
             });
             ds.NEXT;
         }
@@ -1477,6 +1505,7 @@ function getDocumentMapping(params) {
             document_type: ds.DOCUMENT_TYPE,
             direction: ds.DIRECTION,
             auto_process: ds.AUTO_PROCESS? true : false,
+            // Convert boolean fields to true/false
             active: ds.ACTIVE? true : false,
             test_mode: ds.TEST_MODE? true : false,
             xml_root_path: ds.XML_ROOT_PATH,
@@ -1736,6 +1765,7 @@ function checkDocumentMappingExists(params) {
                 sosource: ds.SOSOURCE,
                 fprms: ds.FPRMS,
                 series: ds.SERIES,
+               
                 initialdirin: ds.INITIALDIRIN,
                 initialdirout: ds.INITIALDIROUT,
                 document_type: ds.DOCUMENT_TYPE,
@@ -2027,7 +2057,7 @@ function updateDocumentMapping(params) {
                 X.RUNSQL(updateSql, sqlParams[0], sqlParams[1], sqlParams[2], sqlParams[3], sqlParams[4], sqlParams[5], sqlParams[6], sqlParams[7], sqlParams[8], sqlParams[9], sqlParams[10], sqlParams[11], sqlParams[12], sqlParams[13], sqlParams[14], sqlParams[15]);
                 break;
         }
-
+        
         return {
             success: true,
             message: "Document mapping updated successfully"
@@ -2479,5 +2509,240 @@ function deleteFieldMapping(params) {
             success: false,
             message: "Error deleting field mapping: " + e.message
         };
+    }
+}
+
+/**
+ * Gets all retailers with connection statistics
+ * @param {Object} params Optional filters
+ * @returns {Object} List of retailers with connection details
+ */
+function getRetailers(params) {
+    try {
+        var companyId = X.SYS.COMPANY;
+        
+        // Get all retailers (trading partners) from TRDR table
+        var query = "SELECT " +
+            "r.TRDR as id, " +
+            "r.CODE as retailer_code, " +
+            "r.NAME as retailer_name, " +
+            "r.AFM as tax_id, " +
+            "r.ADDRESS as address, " +
+            "r.PHONE as phone, " +
+            "r.EMAIL as email, " +
+            "r.ISACTIVE as is_active " +
+            "FROM TRDR r " +
+            "WHERE r.COMPANY = " + companyId + " " +
+            "AND r.SODTYPE = 13 " + // 13 = Customer/Retailer type
+            "ORDER BY r.NAME";
+        
+        var ds = X.GETSQLDATASET(query);
+        var result = [];
+        
+        ds.FIRST;
+        while (!ds.EOF) {
+            var retailerId = ds.id;
+            
+            // Get connection statistics for this retailer
+            var statsQuery = "SELECT " +
+                "COUNT(DISTINCT a.TRDR_CLIENT) as client_count, " +
+                "COUNT(DISTINCT a.EDIPROVIDER) as provider_count, " +
+                "COUNT(*) as connection_count, " +
+                "COUNT(CASE WHEN cl.ACTIVE = 1 THEN 1 END) as active_connections " +
+                "FROM CCCSFTP a " +
+                "LEFT JOIN CCCRETAILERSCLIENTS cl ON cl.TRDR_CLIENT = a.TRDR_CLIENT " +
+                "WHERE a.TRDR_RETAILER = :1";
+            
+            var statsDs = X.GETSQLDATASET(statsQuery, retailerId);
+            
+            // Get connected providers for this retailer
+            var providersQuery = "SELECT DISTINCT " +
+                "ep.CCCEDIPROVIDER as provider_id, " +
+                "ep.NAME as provider_name, " +
+                "ct.NAME as conntype_name " +
+                "FROM CCCSFTP a " +
+                "INNER JOIN CCCEDIPROVIDER ep ON a.EDIPROVIDER = ep.CCCEDIPROVIDER " +
+                "INNER JOIN CCCCONNTYPE ct ON ep.CONNTYPE = ct.CCCCONNTYPE " +
+                "WHERE a.TRDR_RETAILER = :1";
+            
+            var providersDs = X.GETSQLDATASET(providersQuery, retailerId);
+            var providers = [];
+            providersDs.FIRST;
+            while (!providersDs.EOF) {
+                providers.push({
+                    provider_id: providersDs.provider_id,
+                    provider_name: providersDs.provider_name,
+                    conntype_name: providersDs.conntype_name
+                });
+                providersDs.NEXT;
+            }
+            
+            // Get connected clients for this retailer
+            var clientsQuery = "SELECT DISTINCT " +
+                "cl.TRDR_CLIENT as client_id, " +
+                "cl.NAME as client_name, " +
+                "cl.ACTIVE as client_active " +
+                "FROM CCCSFTP a " +
+                "LEFT JOIN CCCRETAILERSCLIENTS cl ON cl.TRDR_CLIENT = a.TRDR_CLIENT " +
+                "WHERE a.TRDR_RETAILER = :1";
+            
+            var clientsDs = X.GETSQLDATASET(clientsQuery, retailerId);
+            var clients = [];
+            clientsDs.FIRST;
+            while (!clientsDs.EOF) {
+                clients.push({
+                    client_id: clientsDs.client_id,
+                    client_name: clientsDs.client_name,
+                    client_active: clientsDs.client_active === 1
+                });
+                clientsDs.NEXT;
+            }
+            
+            result.push({
+                id: retailerId,
+                retailer_code: ds.retailer_code,
+                retailer_name: ds.retailer_name,
+                tax_id: ds.tax_id,
+                address: ds.address,
+                phone: ds.phone,
+                email: ds.email,
+                is_active: ds.is_active === 1,
+                
+                // Connection statistics
+                statistics: {
+                    client_count: statsDs.EOF ? 0 : (statsDs.client_count || 0),
+                    provider_count: statsDs.EOF ? 0 : (statsDs.provider_count || 0),
+                    connection_count: statsDs.EOF ? 0 : (statsDs.connection_count || 0),
+                    active_connections: statsDs.EOF ? 0 : (statsDs.active_connections || 0)
+                },
+                
+                // Connected entities
+                connected_providers: providers,
+                connected_clients: clients,
+                
+                // Computed properties
+                connection_status: !statsDs.EOF && statsDs.connection_count > 0 ? 'Connected' : 'Not Connected',
+                status: ds.is_active === 1 ? 'Active' : 'Inactive'
+            });
+            ds.NEXT;
+        }
+        
+        return { success: true, data: result, total: result.length };
+    } catch (e) {
+        return { success: false, message: "Error retrieving retailers: " + e.message };
+    }
+}
+
+/**
+ * Gets a single retailer by ID with full details
+ * @param {Object} params Object with id property
+ * @returns {Object} Single retailer with details and connections
+ */
+function getRetailer(params) {
+    try {
+        var id = params.id;
+        var companyId = X.SYS.COMPANY;
+        
+        if (!id) {
+            return { success: false, message: "Retailer ID is required" };
+        }
+        
+        // Get retailer details
+        var query = "SELECT " +
+            "r.TRDR as id, " +
+            "r.CODE as retailer_code, " +
+            "r.NAME as retailer_name, " +
+            "r.AFM as tax_id, " +
+            "r.ADDRESS as address, " +
+            "r.PHONE as phone, " +
+            "r.EMAIL as email, " +
+            "r.ISACTIVE as is_active, " +
+            "r.CREATEDDATE, " +
+            "r.MODIFIEDDATE " +
+            "FROM TRDR r " +
+            "WHERE r.COMPANY = " + companyId + " " +
+            "AND r.TRDR = :1 " +
+            "AND r.SODTYPE = 13";
+        
+        var ds = X.GETSQLDATASET(query, id);
+        if (ds.EOF) {
+            return { success: false, message: "Retailer not found: " + id };
+        }
+        
+        // Get detailed connection statistics
+        var statsQuery = "SELECT " +
+            "COUNT(DISTINCT a.TRDR_CLIENT) as client_count, " +
+            "COUNT(DISTINCT a.EDIPROVIDER) as provider_count, " +
+            "COUNT(*) as connection_count, " +
+            "COUNT(CASE WHEN cl.ACTIVE = 1 THEN 1 END) as active_connections " +
+            "FROM CCCSFTP a " +
+            "LEFT JOIN CCCRETAILERSCLIENTS cl ON cl.TRDR_CLIENT = a.TRDR_CLIENT " +
+            "WHERE a.TRDR_RETAILER = :1";
+        
+        var statsDs = X.GETSQLDATASET(statsQuery, id);
+        
+        // Get all connections for this retailer
+        var connectionsQuery = "SELECT " +
+            "a.CCCSFTP as connection_id, " +
+            "ep.NAME as provider_name, " +
+            "ct.NAME as conntype_name, " +
+            "cl.NAME as client_name, " +
+            "cl.ACTIVE as client_active, " +
+            "a.URL, " +
+            "a.PORT " +
+            "FROM CCCSFTP a " +
+            "INNER JOIN CCCEDIPROVIDER ep ON a.EDIPROVIDER = ep.CCCEDIPROVIDER " +
+            "INNER JOIN CCCCONNTYPE ct ON ep.CONNTYPE = ct.CCCCONNTYPE " +
+            "LEFT JOIN CCCRETAILERSCLIENTS cl ON cl.TRDR_CLIENT = a.TRDR_CLIENT " +
+            "WHERE a.TRDR_RETAILER = :1 " +
+            "ORDER BY ep.NAME, cl.NAME";
+        
+        var connectionsDs = X.GETSQLDATASET(connectionsQuery, id);
+        var connections = [];
+        connectionsDs.FIRST;
+        while (!connectionsDs.EOF) {
+            connections.push({
+                connection_id: connectionsDs.connection_id,
+                provider_name: connectionsDs.provider_name,
+                conntype_name: connectionsDs.conntype_name,
+                client_name: connectionsDs.client_name,
+                client_active: connectionsDs.client_active === 1,
+                url: connectionsDs.URL,
+                port: connectionsDs.PORT
+            });
+            connectionsDs.NEXT;
+        }
+        
+        var retailer = {
+            id: ds.id,
+            retailer_code: ds.retailer_code,
+            retailer_name: ds.retailer_name,
+            tax_id: ds.tax_id,
+            address: ds.address,
+            phone: ds.phone,
+            email: ds.email,
+            is_active: ds.is_active === 1,
+            created_date: ds.CREATEDDATE,
+            modified_date: ds.MODIFIEDDATE,
+            
+            // Connection statistics
+            statistics: {
+                client_count: statsDs.EOF ? 0 : (statsDs.client_count || 0),
+                provider_count: statsDs.EOF ? 0 : (statsDs.provider_count || 0),
+                connection_count: statsDs.EOF ? 0 : (statsDs.connection_count || 0),
+                active_connections: statsDs.EOF ? 0 : (statsDs.active_connections || 0)
+            },
+            
+            // All connections for this retailer
+            connections: connections,
+            
+            // Computed properties
+            connection_status: connections.length > 0 ? 'Connected' : 'Not Connected',
+            status: ds.is_active === 1 ? 'Active' : 'Inactive'
+        };
+        
+        return { success: true, data: retailer };
+    } catch (e) {
+        return { success: false, message: "Error retrieving retailer: " + e.message };
     }
 }

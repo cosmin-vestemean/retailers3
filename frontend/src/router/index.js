@@ -9,6 +9,7 @@ const Login = () => import('@/views/auth/Login.vue')
 const Clients = () => import('@/views/admin/Clients.vue')
 const EdiProviders = () => import('@/views/admin/EdiProviders.vue')
 const ConnectionTypes = () => import('@/views/admin/ConnectionTypes.vue')
+const Connections = () => import('@/views/admin/Connections.vue')
 
 // Mapping views  
 const DocumentMappings = () => import('@/views/mappings/DocumentMappings.vue')
@@ -40,11 +41,15 @@ const routes = [
         path: 'clients',
         name: 'AdminClients',
         component: Clients
-      },
-      {
+      },      {
         path: 'edi-providers',
         name: 'AdminEdiProviders',
         component: EdiProviders
+      },
+      {
+        path: 'connections',
+        name: 'AdminConnections',
+        component: Connections
       },
       {
         path: 'connection-types',

@@ -56,12 +56,18 @@
             value="clients"
             @click="$router.push('/admin/clients')"
           />
-          
-          <v-list-item
+            <v-list-item
             prepend-icon="mdi-server-network"
             title="EDI Providers"
             value="edi-providers"
             @click="$router.push('/admin/edi-providers')"
+          />
+          
+          <v-list-item
+            prepend-icon="mdi-lan-connect"
+            title="Connections"
+            value="connections"
+            @click="$router.push('/admin/connections')"
           />
           
           <v-list-item
