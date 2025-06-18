@@ -600,6 +600,7 @@ function getRetailersClients(params) {
                 branch: ds.BRANCH,
                 active: ds.ACTIVE === 1,
                 appid: ds.APPID,
+                
                 statistics: {
                     retailer_count: statsDs.EOF ? 0 : (statsDs.retailer_count || 0),
                     connection_count: statsDs.EOF ? 0 : (statsDs.connection_count || 0),
