@@ -1,52 +1,26 @@
 <template>
-  <v-app>
-    <v-main>
-      <v-container fluid class="pa-0">
-        <router-view />
-      </v-container>
-    </v-main>
-    
-    <!-- Global Loading Overlay -->
-    <v-overlay v-model="isGlobalLoading" class="align-center justify-center">
-      <v-progress-circular size="64" indeterminate color="primary" />
-    </v-overlay>
-  </v-app>
+  <img alt="Vue logo" src="./assets/logo.png">
+  <HelloWorld msg="Welcome to Your Vue.js App"/>
 </template>
 
 <script>
-import { computed, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/auth'
-import { useAppStore } from '@/stores/app'
+import HelloWorld from './components/HelloWorld.vue'
 
 export default {
   name: 'App',
-  setup() {
-    const authStore = useAuthStore()
-    const appStore = useAppStore()
-
-    // Initialize the app
-    onMounted(async () => {
-      // Try to authenticate with stored token
-      if (authStore.token) {
-        try {
-          await authStore.fetchCurrentUser()
-          // Load reference data if authenticated
-          if (authStore.isAuthenticated) {
-            await appStore.loadReferenceData()
-          }
-        } catch (error) {
-          console.warn('Failed to initialize app:', error)
-        }
-      }
-    })
-
-    return {
-      isGlobalLoading: computed(() => Object.values(appStore.isLoading).some(loading => loading))
-    }
+  components: {
+    HelloWorld
   }
 }
 </script>
 
-<style scoped>
-/* Global app styles can go here */
+<style>
+#app {
+  font-family: Avenir, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-align: center;
+  color: #2c3e50;
+  margin-top: 60px;
+}
 </style>

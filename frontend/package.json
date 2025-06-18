@@ -31,6 +31,20 @@
     "jsdom": "^26.1.0",
     "vitest": "^3.2.3"
   },
+  "eslintConfig": {
+    "root": true,
+    "env": {
+      "node": true
+    },
+    "extends": [
+      "plugin:vue/vue3-essential",
+      "eslint:recommended"
+    ],
+    "parserOptions": {
+      "parser": "@babel/eslint-parser"
+    },
+    "rules": {}
+  },
   "browserslist": [
     "> 1%",
     "last 2 versions",
